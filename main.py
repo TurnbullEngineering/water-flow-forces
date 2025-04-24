@@ -15,7 +15,6 @@ def calculate_forces(
     cd,
     log_mass,
     stopping_distance,
-    load_factor=Decimal("1.0"),
 ):
     # Convert all inputs to Decimal for precise calculations
     column_diameter = Decimal(str(column_diameter))
@@ -48,10 +47,7 @@ def calculate_forces(
     F3 = log_mass * acceleration
     L3 = water_depth
 
-    # Apply load factor and convert F3 from N to kN
-    F1 = F1 * load_factor
-    F2 = F2 * load_factor
-    F3 = (F3 / Decimal("1000")) * load_factor  # Convert to kN and apply load factor
+    F3 = F3 / Decimal("1000")
 
     return F1, L1, F2, L2, F3, L3
 
@@ -91,7 +87,6 @@ def process_dataframe(df: pd.DataFrame, inputs):
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
-            Decimal(str(inputs["load_factor"])),
         )
 
         results.append(
@@ -210,15 +205,6 @@ def main():
         help="Default: 0.025m (25mm)",
     )
 
-    inputs["load_factor"] = st.sidebar.number_input(
-        "Load Factor",
-        min_value=0.1,
-        max_value=10.0,
-        value=1.0,
-        step=0.1,
-        help="Factor to be applied to all forces",
-    )
-
     # Preview calculation
     st.header("Preview Calculation")
     st.info(
@@ -235,7 +221,6 @@ def main():
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
-            Decimal(str(inputs["load_factor"])),
         )
     )
 
