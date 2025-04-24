@@ -3,7 +3,6 @@ import pandas as pd
 from decimal import Decimal, getcontext
 from io import BytesIO
 
-# Set precision for decimal calculations
 getcontext().prec = 28
 
 
@@ -11,12 +10,11 @@ def calculate_forces(
     column_diameter,
     water_depth,
     water_velocity,
-    debris_mat_depth,  # Changed parameter name for clarity
+    debris_mat_depth,
     cd,
     log_mass,
     stopping_distance,
 ):
-    # Convert all inputs to Decimal for precise calculations
     column_diameter = Decimal(str(column_diameter))
     water_depth = Decimal(str(water_depth))
     water_velocity = Decimal(str(water_velocity))
@@ -30,19 +28,17 @@ def calculate_forces(
 
     # Calculate debris mat area (Adeb) for F2
     debris_span = Decimal("20.0")  # m
-    Adeb = debris_mat_depth * debris_span  # Using debris_mat_depth
+    Adeb = debris_mat_depth * debris_span
 
-    # Calculate forces and their locations
     # F1 - Water Flow Force
     F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad
     L1 = water_depth / Decimal("2")
 
     # F2 - Debris Force
     F2 = Decimal("0.5") * cd * (water_velocity**2) * Adeb
-    L2 = water_depth - (debris_mat_depth / Decimal("2"))  # Using debris_mat_depth
+    L2 = water_depth - (debris_mat_depth / Decimal("2"))
 
     # F3 - Log Impact Force
-    # F = ma, where a = v²/2s
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
     F3 = log_mass * acceleration
     L3 = water_depth
@@ -53,14 +49,11 @@ def calculate_forces(
 
 
 def process_dataframe(df: pd.DataFrame, inputs):
-    # Clean column names - replace returns with spaces and trim
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
-    # Required columns
     VELOCITY_COL = "PMF Event Peak Velocity"
     DEPTH_COL = "PMF Event Peak Flood Depth"
 
-    # Validate required columns exist
     missing_cols = []
     if VELOCITY_COL not in df.columns:
         missing_cols.append(VELOCITY_COL)
@@ -70,20 +63,17 @@ def process_dataframe(df: pd.DataFrame, inputs):
     if missing_cols:
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
 
-    # Initialize result columns
     results = []
 
-    # Process each row
     for idx, row in df.iterrows():
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
 
-        # Calculate forces using the debris mat depth from inputs
         F1, L1, F2, L2, F3, L3 = calculate_forces(
             inputs["column_diameter"],
             water_depth,
             water_velocity,
-            inputs["debris_mat_depth"],  # Using input parameter
+            inputs["debris_mat_depth"],
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
@@ -100,18 +90,14 @@ def process_dataframe(df: pd.DataFrame, inputs):
             }
         )
 
-    # Convert results to DataFrame
     results_df = pd.DataFrame(results)
 
-    # Combine DataFrames
     combined_df = pd.concat([df, results_df], axis=1)
 
-    # Convert all object columns to string type
     object_columns = combined_df.select_dtypes(include=["object"]).columns
     for col in object_columns:
         combined_df[col] = combined_df[col].astype(str)
 
-    # Ensure all numeric columns are float type for consistency
     numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3"]
     for col in numeric_cols:
         combined_df[col] = combined_df[col].astype(float)
@@ -122,7 +108,7 @@ def process_dataframe(df: pd.DataFrame, inputs):
 def main():
     st.title("Water Flow Forces Calculator")
 
-    # Input parameters
+    st.sidebar.image("gc-icon.jpeg")
     st.sidebar.header("Structure Parameters")
 
     inputs = {}
@@ -205,7 +191,6 @@ def main():
         help="Default: 0.025m (25mm)",
     )
 
-    # Preview calculation
     st.header("Preview Calculation")
     st.info(
         "This preview uses the water depth and velocity values from the sliders. "
@@ -237,7 +222,6 @@ def main():
         st.write(f"**L2:** {preview_L2:.1f} m")
         st.write(f"**L3:** {preview_L3:.1f} m")
 
-    # Excel Processing Section
     st.markdown("---")
     st.header("Excel Processing")
     st.markdown(
@@ -259,10 +243,8 @@ def main():
 
             if st.button("Process Excel File"):
                 try:
-                    # Process the data
                     result_df = process_dataframe(df, inputs)
 
-                    # Show preview
                     st.subheader("Results Preview")
                     try:
                         st.dataframe(result_df)
@@ -278,7 +260,6 @@ def main():
                             result_df[col] = result_df[col].astype(str)
                         st.dataframe(result_df)
 
-                    # Download button
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine="openpyxl") as writer:
                         result_df.to_excel(writer, index=False)
@@ -287,7 +268,7 @@ def main():
                     st.download_button(
                         label="Download Results as Excel",
                         data=output,
-                        file_name="water_flow_forces_results.xlsx",
+                        file_name=f"forces_results_{uploaded_file.name}",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
 
