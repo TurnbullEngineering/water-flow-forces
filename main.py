@@ -6,6 +6,59 @@ from io import BytesIO
 getcontext().prec = 28
 
 
+def Cd(V: Decimal, y: Decimal) -> Decimal:
+    """
+    Compute the drag coefficient C_d for pier-debris blockage based on V²y.
+
+    Source:
+      • Figure 16.6.4(A) “Pier Debris C_d”
+      • AS 5100.2:2017 - Bridge Design Part 2: Design Loads
+
+    This uses the following piecewise-linear definition:
+
+      V²y range    | C_d
+      -------------|------
+      V²y <= 40     | 3.4
+      40 -> 60      | 3.4 → 2.8
+      60 -> 85      | 2.8 → 2.35
+      85 -> 100     | 2.35 → 2.20
+      100 -> 130    | 2.20 → 1.95
+      130 -> 260    | 1.95 → 1.60
+      V²y >= 260    | 1.6
+
+    The slopes in each interior segment connect the endpoints exactly.
+
+    Parameters
+    ----------
+    V : Decimal
+        Approach-flow velocity in m/s.
+    y : Decimal
+        Mean flow depth in m.
+
+    Returns
+    -------
+    Decimal
+        Dimensionless drag coefficient, C_d.
+    """
+
+    V2y = V**2 * y
+
+    if V2y <= 40:
+        return Decimal("3.4")
+    elif V2y <= 60:
+        return Decimal("3.4") - Decimal("0.03") * (V2y - 40)
+    elif V2y <= 85:
+        return Decimal("2.8") - Decimal("0.018") * (V2y - 60)
+    elif V2y <= 100:
+        return Decimal("2.35") - Decimal("0.01") * (V2y - 85)
+    elif V2y <= 130:
+        return Decimal("2.2") - Decimal("0.00833") * (V2y - 100)
+    elif V2y <= 260:
+        return Decimal("1.95") - Decimal("0.00269") * (V2y - 130)
+    else:
+        return Decimal("1.6")
+
+
 def calculate_forces(
     column_diameter,
     water_depth,
@@ -35,7 +88,8 @@ def calculate_forces(
     L1 = water_depth / Decimal("2")
 
     # F2 - Debris Force
-    F2 = Decimal("0.5") * cd * (water_velocity**2) * Adeb
+    C_debris = Cd(water_velocity, water_depth)
+    F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb
     L2 = water_depth - (debris_mat_depth / Decimal("2"))
 
     # F3 - Log Impact Force
@@ -164,7 +218,7 @@ def main():
     )
 
     inputs["cd"] = st.sidebar.number_input(
-        "Drag Coefficient (Cd)",
+        "Water Drag Coefficient on Column (Cd)",
         min_value=0.1,
         max_value=2.0,
         value=0.7,
