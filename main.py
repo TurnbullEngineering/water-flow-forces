@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from decimal import Decimal, getcontext
 from io import BytesIO
+import matplotlib.pyplot as plt
 
 getcontext().prec = 28
 
@@ -102,6 +103,162 @@ def calculate_forces(
     return F1, L1, F2, L2, F3, L3
 
 
+def draw_column_diagram(
+    water_depth,
+    column_height,
+    column_diameter,
+    debris_mat_depth,
+    F1,
+    F2,
+    F3,
+    L1,
+    L2,
+    L3,
+):
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Ground
+    ground_level = 0
+    ax.axhline(y=ground_level, color="brown", linestyle="-", linewidth=2)
+
+    # Column
+    column_bottom = ground_level
+    column_x = 5  # Center position
+    rect = plt.Rectangle(
+        (column_x - column_diameter / 2, column_bottom),
+        column_diameter,
+        column_height,
+        color="gray",
+        alpha=0.5,
+    )
+    ax.add_patch(rect)
+
+    # Water level
+    water_y = ground_level + float(water_depth)
+    ax.axhline(y=water_y, color="blue", linestyle="--", alpha=0.5)
+    ax.text(0.5, water_y, "Water Level", verticalalignment="bottom")
+
+    # Debris mat
+    debris_y = water_y - float(debris_mat_depth)
+    debris_width = 4  # Visual width for debris
+    rect_debris = plt.Rectangle(
+        (column_x - debris_width / 2, debris_y),
+        debris_width,
+        float(debris_mat_depth),
+        color="brown",
+        alpha=0.3,
+    )
+    ax.add_patch(rect_debris)
+    ax.text(
+        column_x - debris_width / 2 - 0.5,
+        debris_y + float(debris_mat_depth) / 2,
+        "Debris Mat",
+        verticalalignment="center",
+        rotation=90,
+    )
+
+    # Forces
+    arrow_props = dict(width=0.5, head_width=0.3, head_length=0.3, fc="red", ec="red")
+    # F1 at L1
+    ax.arrow(
+        column_x + column_diameter / 2 + 1,
+        ground_level + float(L1),
+        2,
+        0,
+        **arrow_props,
+    )
+    ax.text(
+        column_x + column_diameter / 2 + 3.5,
+        ground_level + float(L1),
+        f"F1 = {float(F1):.1f} kN",
+        verticalalignment="center",
+    )
+
+    # F2 at L2
+    ax.arrow(
+        column_x + column_diameter / 2 + 1,
+        ground_level + float(L2),
+        2,
+        0,
+        **arrow_props,
+    )
+    ax.text(
+        column_x + column_diameter / 2 + 3.5,
+        ground_level + float(L2),
+        f"F2 = {float(F2):.1f} kN",
+        verticalalignment="center",
+    )
+
+    # F3 at L3
+    ax.arrow(
+        column_x + column_diameter / 2 + 1,
+        ground_level + float(L3),
+        2,
+        0,
+        **arrow_props,
+    )
+    ax.text(
+        column_x + column_diameter / 2 + 3.5,
+        ground_level + float(L3),
+        f"F3 = {float(F3):.1f} kN",
+        verticalalignment="center",
+    )
+
+    # Dimensions
+    ax.annotate(
+        "",
+        xy=(column_x - column_diameter / 2 - 0.5, ground_level),
+        xytext=(column_x - column_diameter / 2 - 0.5, water_y),
+        arrowprops=dict(arrowstyle="<->"),
+    )
+    ax.text(
+        column_x - column_diameter / 2 - 1,
+        (ground_level + water_y) / 2,
+        f"Water Depth\n{float(water_depth):.1f} m",
+        verticalalignment="center",
+    )
+
+    ax.annotate(
+        "",
+        xy=(column_x - column_diameter / 2 - 2, ground_level),
+        xytext=(
+            column_x - column_diameter / 2 - 2,
+            ground_level + float(column_height),
+        ),
+        arrowprops=dict(arrowstyle="<->"),
+    )
+    ax.text(
+        column_x - column_diameter / 2 - 2.5,
+        ground_level + float(column_height) / 2,
+        f"Column Height\n{float(column_height):.1f} m",
+        verticalalignment="center",
+    )
+
+    ax.annotate(
+        "",
+        xy=(column_x - column_diameter / 2, ground_level - 0.5),
+        xytext=(column_x + column_diameter / 2, ground_level - 0.5),
+        arrowprops=dict(arrowstyle="<->"),
+    )
+    ax.text(
+        column_x,
+        ground_level - 1,
+        f"Diameter\n{float(column_diameter):.1f} m",
+        horizontalalignment="center",
+    )
+
+    # Set limits and labels
+    ax.set_xlim(0, 10)
+    ax.set_ylim(ground_level - 1.5, max(float(column_height), float(water_depth)) + 1)
+    ax.set_xlabel("Width (m)")
+    ax.set_ylabel("Height (m)")
+    ax.set_title("Column Forces Diagram")
+    ax.grid(True, linestyle="--", alpha=0.3)
+    ax.set_aspect("equal")
+
+    return fig
+
+
 def process_dataframe(df: pd.DataFrame, inputs):
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
@@ -145,7 +302,6 @@ def process_dataframe(df: pd.DataFrame, inputs):
         )
 
     results_df = pd.DataFrame(results)
-
     combined_df = pd.concat([df, results_df], axis=1)
 
     object_columns = combined_df.select_dtypes(include=["object"]).columns
@@ -275,6 +431,22 @@ def main():
         st.write(f"**L1:** {preview_L1:.1f} m")
         st.write(f"**L2:** {preview_L2:.1f} m")
         st.write(f"**L3:** {preview_L3:.1f} m")
+
+    # Draw and display the diagram
+    st.subheader("Force Diagram")
+    fig = draw_column_diagram(
+        water_depth=preview_depth,
+        column_height=inputs["column_height"],
+        column_diameter=inputs["column_diameter"],
+        debris_mat_depth=inputs["debris_mat_depth"],
+        F1=preview_F1,
+        F2=preview_F2,
+        F3=preview_F3,
+        L1=preview_L1,
+        L2=preview_L2,
+        L3=preview_L3,
+    )
+    st.pyplot(fig)
 
     st.markdown("---")
     st.header("Excel Processing")
