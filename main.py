@@ -81,8 +81,10 @@ def calculate_forces(
     Ad = water_depth * column_diameter
 
     # Calculate debris mat area (Adeb) for F2
+    # Ensure debris mat depth doesn't exceed water depth
+    effective_debris_depth = min(debris_mat_depth, water_depth)
     debris_span = Decimal("20.0")  # m
-    Adeb = debris_mat_depth * debris_span
+    Adeb = effective_debris_depth * debris_span
 
     # F1 - Water Flow Force
     F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad
@@ -91,7 +93,7 @@ def calculate_forces(
     # F2 - Debris Force
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb
-    L2 = water_depth - (debris_mat_depth / Decimal("2"))
+    L2 = water_depth - (effective_debris_depth / Decimal("2"))
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
@@ -364,13 +366,16 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
 
+    max_debris_depth = min(10.0, preview_depth)  # Limit by water depth
+    default_debris_depth = min(3.0, max_debris_depth)  # Adjust default if needed
+
     inputs["debris_mat_depth"] = st.sidebar.number_input(
         "Debris Mat Depth (m)",
         min_value=0.1,
-        max_value=10.0,
-        value=3.0,
+        max_value=max_debris_depth,
+        value=default_debris_depth,
         step=0.1,
-        help="Depth of debris mat for force calculation",
+        help="Depth of debris mat for force calculation (limited by water depth)",
     )
 
     inputs["cd"] = st.sidebar.number_input(
