@@ -55,9 +55,9 @@ def Cd(V: Decimal, y: Decimal) -> Decimal:
     elif V2y <= 130:
         return Decimal("2.2") - Decimal("0.00833") * (V2y - 100)
     elif V2y <= 260:
-        return Decimal("1.95") - Decimal("0.00269") * (V2y - 130)
+        return Decimal("1.95") - Decimal("0.00423") * (V2y - 130)
     else:
-        return Decimal("1.6")
+        return Decimal("1.4")
 
 
 def calculate_forces(
@@ -68,6 +68,7 @@ def calculate_forces(
     cd,
     log_mass,
     stopping_distance,
+    load_factor,
 ):
     column_diameter = Decimal(str(column_diameter))
     water_depth = Decimal(str(water_depth))
@@ -76,6 +77,7 @@ def calculate_forces(
     cd = Decimal(str(cd))
     log_mass = Decimal(str(log_mass))
     stopping_distance = Decimal(str(stopping_distance))
+    load_factor = Decimal(str(load_factor))
 
     # Calculate wetted area (Ad) for F1
     Ad = water_depth * column_diameter
@@ -87,17 +89,17 @@ def calculate_forces(
     Adeb = effective_debris_depth * debris_span
 
     # F1 - Water Flow Force
-    F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad
+    F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad * load_factor
     L1 = water_depth / Decimal("2")
 
     # F2 - Debris Force
     C_debris = Cd(water_velocity, water_depth)
-    F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb
+    F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
     L2 = water_depth - (effective_debris_depth / Decimal("2"))
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
-    F3 = log_mass * acceleration
+    F3 = log_mass * acceleration * load_factor
     L3 = water_depth
 
     F3 = F3 / Decimal("1000")
@@ -290,6 +292,7 @@ def process_dataframe(df: pd.DataFrame, inputs):
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
+            inputs["load_factor"],
         )
 
         results.append(
@@ -406,6 +409,15 @@ def main():
         help="Default: 0.025m (25mm)",
     )
 
+    inputs["load_factor"] = st.sidebar.number_input(
+        "Load Factor",
+        min_value=0.1,
+        max_value=3.0,
+        value=1.3,
+        step=0.1,
+        help="Safety factor applied to all forces (Default: 1.3)",
+    )
+
     st.header("Preview Calculation")
     st.info(
         "This preview uses the water depth and velocity values from the sliders. "
@@ -421,6 +433,7 @@ def main():
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
+            inputs["load_factor"],
         )
     )
 
