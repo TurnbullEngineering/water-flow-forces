@@ -303,6 +303,8 @@ def process_dataframe(df: pd.DataFrame, inputs):
                 "L2": float(L2),
                 "F3": float(F3),
                 "L3": float(L3),
+                "F1+F2": float(F1 + F2),
+                "F1+F3": float(F1 + F3),
             }
         )
 
@@ -313,7 +315,7 @@ def process_dataframe(df: pd.DataFrame, inputs):
     for col in object_columns:
         combined_df[col] = combined_df[col].astype(str)
 
-    numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3"]
+    numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3", "F1+F2", "F1+F3"]
     for col in numeric_cols:
         combined_df[col] = combined_df[col].astype(float)
 
@@ -449,6 +451,10 @@ def main():
         st.write(f"**L1:** {preview_L1:.1f} m")
         st.write(f"**L2:** {preview_L2:.1f} m")
         st.write(f"**L3:** {preview_L3:.1f} m")
+
+    st.subheader("Load Combinations")
+    st.write(f"**F1 (Water Flow) + F2 (Debris):** {preview_F1 + preview_F2:.1f} kN")
+    st.write(f"**F1 (Water Flow) + F3 (Log Impact):** {preview_F1 + preview_F3:.1f} kN")
 
     # Draw and display the diagram
     st.subheader("Force Diagram")
