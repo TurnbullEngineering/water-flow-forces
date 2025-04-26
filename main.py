@@ -174,7 +174,7 @@ def draw_column_diagram(
     ax.text(
         column_x + column_diameter / 2 + 3.5,
         ground_level + float(L1),
-        f"F1 = {float(F1):.1f} kN",
+        f"F1 = {float(F1):.1f} kN @ L1 = {float(L1):.1f} m",
         verticalalignment="center",
     )
 
@@ -189,7 +189,7 @@ def draw_column_diagram(
     ax.text(
         column_x + column_diameter / 2 + 3.5,
         ground_level + float(L2),
-        f"F2 = {float(F2):.1f} kN",
+        f"F2 = {float(F2):.1f} kN @ L2 = {float(L2):.1f} m",
         verticalalignment="center",
     )
 
@@ -204,7 +204,7 @@ def draw_column_diagram(
     ax.text(
         column_x + column_diameter / 2 + 3.5,
         ground_level + float(L3),
-        f"F3 = {float(F3):.1f} kN",
+        f"F3 = {float(F3):.1f} kN @ L3 = {float(L3):.1f} m",
         verticalalignment="center",
     )
 
@@ -303,8 +303,6 @@ def process_dataframe(df: pd.DataFrame, inputs):
                 "L2": float(L2),
                 "F3": float(F3),
                 "L3": float(L3),
-                "F1+F2": float(F1 + F2),
-                "F1+F3": float(F1 + F3),
             }
         )
 
