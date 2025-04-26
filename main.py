@@ -313,7 +313,7 @@ def process_dataframe(df: pd.DataFrame, inputs):
     for col in object_columns:
         combined_df[col] = combined_df[col].astype(str)
 
-    numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3", "F1+F2", "F1+F3"]
+    numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3"]
     for col in numeric_cols:
         combined_df[col] = combined_df[col].astype(float)
 
