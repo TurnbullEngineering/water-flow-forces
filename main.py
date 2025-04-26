@@ -453,8 +453,8 @@ def main():
         st.write(f"**L3:** {preview_L3:.1f} m")
 
     st.subheader("Load Combinations")
-    st.write(f"**F1 (Water Flow) + F2 (Debris):** {preview_F1 + preview_F2:.1f} kN")
-    st.write(f"**F1 (Water Flow) + F3 (Log Impact):** {preview_F1 + preview_F3:.1f} kN")
+    st.write("**F1 (Water Flow) + F2 (Debris)")
+    st.write("**F1 (Water Flow) + F3 (Log Impact)")
 
     # Draw and display the diagram
     st.subheader("Force Diagram")
