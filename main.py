@@ -12,7 +12,7 @@ def Cd(V: Decimal, y: Decimal) -> Decimal:
     Compute the drag coefficient C_d for pier-debris blockage based on V²y.
 
     Source:
-      • Figure 16.6.4(A) “Pier Debris C_d”
+      • Figure 16.6.4(A) "Pier Debris C_d"
       • AS 5100.2:2017 - Bridge Design Part 2: Design Loads
 
     This uses the following piecewise-linear definition:
@@ -24,8 +24,8 @@ def Cd(V: Decimal, y: Decimal) -> Decimal:
       60 -> 85      | 2.8 → 2.35
       85 -> 100     | 2.35 → 2.20
       100 -> 130    | 2.20 → 1.95
-      130 -> 260    | 1.95 → 1.60
-      V²y >= 260    | 1.6
+      130 -> 260    | 1.95 → 1.40
+      V²y >= 260    | 1.40
 
     The slopes in each interior segment connect the endpoints exactly.
 
@@ -58,6 +58,29 @@ def Cd(V: Decimal, y: Decimal) -> Decimal:
         return Decimal("1.95") - Decimal("0.00423") * (V2y - 130)
     else:
         return Decimal("1.4")
+
+
+def calculate_actual_debris_depth(
+    water_depth: Decimal, min_debris_depth: Decimal, max_debris_depth: Decimal
+) -> Decimal:
+    """
+    Calculate actual debris depth based on water depth and constraints.
+
+    Parameters
+    ----------
+    water_depth : Decimal
+        The depth of water
+    min_debris_depth : Decimal
+        Minimum allowed debris depth
+    max_debris_depth : Decimal
+        Maximum allowed debris depth
+
+    Returns
+    -------
+    Decimal
+        The actual debris depth constrained by min and max values
+    """
+    return min(max_debris_depth, max(min_debris_depth, water_depth))
 
 
 def calculate_forces(
@@ -143,19 +166,25 @@ def draw_column_diagram(
     ax.text(0.5, water_y, "Water Level", verticalalignment="bottom")
 
     # Debris mat
-    debris_y = water_y - float(debris_mat_depth)
+    debris_y = max(
+        ground_level, water_y - float(debris_mat_depth)
+    )  # Don't go below ground
+    debris_height = float(debris_mat_depth)
+    if debris_y + debris_height < water_y:
+        debris_height = water_y - debris_y  # Adjust height to not exceed water level
+
     debris_width = 4  # Visual width for debris
     rect_debris = plt.Rectangle(
         (column_x - debris_width / 2, debris_y),
         debris_width,
-        float(debris_mat_depth),
+        debris_height,
         color="brown",
         alpha=0.3,
     )
     ax.add_patch(rect_debris)
     ax.text(
         column_x - debris_width / 2 - 0.5,
-        debris_y + float(debris_mat_depth) / 2,
+        debris_y + debris_height / 2,
         "Debris Mat",
         verticalalignment="center",
         rotation=90,
@@ -284,11 +313,17 @@ def process_dataframe(df: pd.DataFrame, inputs):
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
 
+        actual_debris_depth = calculate_actual_debris_depth(
+            Decimal(str(water_depth)),
+            Decimal(str(inputs["min_debris_depth"])),
+            Decimal(str(inputs["max_debris_depth"])),
+        )
+
         F1, L1, F2, L2, F3, L3 = calculate_forces(
             inputs["column_diameter"],
             water_depth,
             water_velocity,
-            inputs["debris_mat_depth"],
+            float(actual_debris_depth),
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
@@ -369,16 +404,22 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
 
-    max_debris_depth = min(10.0, preview_depth)  # Limit by water depth
-    default_debris_depth = min(3.0, max_debris_depth)  # Adjust default if needed
-
-    inputs["debris_mat_depth"] = st.sidebar.number_input(
-        "Debris Mat Depth (m)",
+    inputs["min_debris_depth"] = st.sidebar.number_input(
+        "Min Debris Mat Depth (m)",
         min_value=0.1,
-        max_value=max_debris_depth,
-        value=default_debris_depth,
+        max_value=10.0,
+        value=1.2,
         step=0.1,
-        help="Depth of debris mat for force calculation (limited by water depth)",
+        help="Minimum depth of debris mat",
+    )
+
+    inputs["max_debris_depth"] = st.sidebar.number_input(
+        "Max Debris Mat Depth (m)",
+        min_value=inputs["min_debris_depth"],
+        max_value=10.0,
+        value=3.0,
+        step=0.1,
+        help="Maximum depth of debris mat",
     )
 
     inputs["cd"] = st.sidebar.number_input(
@@ -424,12 +465,18 @@ def main():
         "These values will be replaced by the Excel columns when processing the file."
     )
 
+    actual_debris_depth = calculate_actual_debris_depth(
+        Decimal(str(preview_depth)),
+        Decimal(str(inputs["min_debris_depth"])),
+        Decimal(str(inputs["max_debris_depth"])),
+    )
+
     preview_F1, preview_L1, preview_F2, preview_L2, preview_F3, preview_L3 = (
         calculate_forces(
             inputs["column_diameter"],
             preview_depth,
             preview_velocity,
-            inputs["debris_mat_depth"],
+            float(actual_debris_depth),
             inputs["cd"],
             inputs["log_mass"],
             inputs["stopping_distance"],
@@ -460,7 +507,7 @@ def main():
         water_depth=preview_depth,
         column_height=inputs["column_height"],
         column_diameter=inputs["column_diameter"],
-        debris_mat_depth=inputs["debris_mat_depth"],
+        debris_mat_depth=float(actual_debris_depth),
         F1=preview_F1,
         F2=preview_F2,
         F3=preview_F3,
@@ -500,7 +547,6 @@ def main():
                         st.error(
                             "Error displaying results. Converting problematic columns to string type..."
                         )
-                        # Convert all object columns to string type
                         object_columns = result_df.select_dtypes(
                             include=["object"]
                         ).columns
@@ -508,11 +554,71 @@ def main():
                             result_df[col] = result_df[col].astype(str)
                         st.dataframe(result_df)
 
+                    terms_df = pd.DataFrame(
+                        {
+                            "Terms": [
+                                "The Water Flow Forces Calculator, developed by Turnbull Engineering Pty Ltd, estimates design forces on transmission tower footings in accordance with AS 5100.2 Section 16 - Forces Resulting from Water Flow.",
+                                "The tool applies reasonable engineering assumptions, including (but not limited to) a default load factor of 1.3 for the PMF peak flood, reflecting considerations such as climate change, limited redundancy, and inspection/maintenance constraints.",
+                                "By using this tool, you acknowledge that you are appropriately qualified to interpret its outputs. Turnbull Engineering Pty Ltd reserves the right to update, modify, or discontinue the software and documentation without notice.",
+                                "The embedded sheet outlines key assumptions and design input parameters used in the calculations. For bespoke scenarios or custom refinements, please contact Marco.Liang@Turnbullengineering.com.au.",
+                                "",
+                                "Embedded Design Assumptions:",
+                                "- Scour protection is assumed; scour depth is excluded from force calculations.",
+                                "- Wetted area is calculated as the product of water depth and column diameter.",
+                                "- Debris width is assumed to be 20 m.",
+                                "- For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
+                                "- Default load factor is 1.3, actual load factor used for calculations is a parameter.",
+                                "",
+                            ]
+                        }
+                    )
+
+                    # Create parameters dataframe
+                    params_df = pd.DataFrame(
+                        {
+                            "Parameter": [
+                                "Column Diameter (m)",
+                                "Min Debris Mat Depth (m)",
+                                "Max Debris Mat Depth (m)",
+                                "Debris Span (m)",
+                                "Water Drag Coefficient (Cd)",
+                                "Log Mass (kg)",
+                                "Stopping Distance (m)",
+                                "Load Factor",
+                            ],
+                            "Value": [
+                                inputs["column_diameter"],
+                                inputs["min_debris_depth"],
+                                inputs["max_debris_depth"],
+                                20.0,  # Debris span is hard-coded
+                                inputs["cd"],
+                                inputs["log_mass"],
+                                inputs["stopping_distance"],
+                                inputs["load_factor"],
+                            ],
+                        }
+                    )
+
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                        result_df.to_excel(writer, index=False)
-                    output.seek(0)
+                        result_df.to_excel(
+                            writer,
+                            sheet_name="Results",
+                            index=False,
+                        )
 
+                        terms_df.to_excel(
+                            writer, sheet_name="Input Parameters", index=False
+                        )
+
+                        params_df.to_excel(
+                            writer,
+                            sheet_name="Input Parameters",
+                            startrow=len(terms_df) + 1,
+                            index=False,
+                        )
+
+                    output.seek(0)
                     st.download_button(
                         label="Download Results as Excel",
                         data=output,
