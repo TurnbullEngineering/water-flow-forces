@@ -107,10 +107,8 @@ def calculate_forces(
     Ad = water_depth * column_diameter
 
     # Calculate debris mat area (Adeb) for F2
-    # Ensure debris mat depth doesn't exceed water depth
-    effective_debris_depth = min(debris_mat_depth, water_depth)
     debris_span = Decimal("20.0")  # m
-    Adeb = effective_debris_depth * debris_span
+    Adeb = debris_mat_depth * debris_span
 
     # F1 - Water Flow Force
     F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad * load_factor
@@ -119,7 +117,9 @@ def calculate_forces(
     # F2 - Debris Force
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
-    L2 = water_depth - (effective_debris_depth / Decimal("2"))
+    L2 = max(
+        water_depth - (debris_mat_depth / Decimal("2")), water_depth / Decimal("2")
+    )
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
