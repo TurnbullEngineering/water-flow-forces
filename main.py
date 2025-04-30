@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from decimal import Decimal, getcontext
 from io import BytesIO
 import matplotlib.pyplot as plt
@@ -330,14 +331,39 @@ def process_dataframe(df: pd.DataFrame, inputs):
     if DEPTH_COL not in df.columns:
         missing_cols.append(DEPTH_COL)
 
+    df[VELOCITY_COL] = pd.to_numeric(df[VELOCITY_COL], errors="coerce")
+    df[DEPTH_COL] = pd.to_numeric(df[DEPTH_COL], errors="coerce")
+
     if missing_cols:
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
 
     results = []
 
+    def is_invalid_value(val):
+        if pd.isna(val) or val == np.nan:
+            return True
+        return False
+
     for idx, row in df.iterrows():
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
+
+        # If either value is invalid, output N/A for all results
+        if is_invalid_value(water_depth) or is_invalid_value(water_velocity):
+            print(type(water_depth), type(water_velocity))
+            print(water_depth, water_velocity)
+            print("Invalid values detected, skipping row.")
+            results.append(
+                {
+                    "F1": "N/A",
+                    "L1": "N/A",
+                    "F2": "N/A",
+                    "L2": "N/A",
+                    "F3": "N/A",
+                    "L3": "N/A",
+                }
+            )
+            continue
 
         actual_debris_depth = calculate_actual_debris_depth(
             Decimal(str(water_depth)),
@@ -369,14 +395,17 @@ def process_dataframe(df: pd.DataFrame, inputs):
 
     results_df = pd.DataFrame(results)
     combined_df = pd.concat([df, results_df], axis=1)
+    combined_df.replace(
+        to_replace=[np.inf, -np.inf, np.nan],
+        value="N/A",
+        inplace=True,
+    )
 
     object_columns = combined_df.select_dtypes(include=["object"]).columns
     for col in object_columns:
         combined_df[col] = combined_df[col].astype(str)
 
-    numeric_cols = ["F1", "L1", "F2", "L2", "F3", "L3"]
-    for col in numeric_cols:
-        combined_df[col] = combined_df[col].astype(float)
+    # Skip converting columns with N/A values to float
 
     return combined_df
 
