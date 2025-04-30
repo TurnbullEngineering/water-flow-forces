@@ -3,6 +3,7 @@ import pandas as pd
 from decimal import Decimal, getcontext
 from io import BytesIO
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 getcontext().prec = 28
 
@@ -521,118 +522,143 @@ def main():
     st.header("Excel Processing")
     st.markdown(
         """
-        Upload an Excel file with the following required columns:
+        Upload Excel files with the following required columns:
         - **PMF Event Peak Flood Depth**: Will replace the preview water depth
         - **PMF Event Peak Velocity**: Will replace the preview water velocity
         
         Other parameters (including debris mat depth) will use the values from the sliders.
+        All files will be processed automatically and available for download as a zip file.
         """
     )
 
-    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
+    uploaded_files = st.file_uploader(
+        "Upload Excel files", type=["xlsx"], accept_multiple_files=True
+    )
 
-    if uploaded_file is not None:
+    if not uploaded_files:
+        return
+
+    from zipfile import ZipFile
+
+    processed_files = []
+    all_results_preview = []
+
+    for uploaded_file in uploaded_files:
         try:
             df = pd.read_excel(uploaded_file)
-            st.success("File uploaded successfully!")
-
-            if st.button("Process Excel File"):
-                try:
-                    result_df = process_dataframe(df, inputs)
-
-                    st.subheader("Results Preview")
-                    try:
-                        st.dataframe(result_df)
-                    except Exception:
-                        st.error(
-                            "Error displaying results. Converting problematic columns to string type..."
-                        )
-                        object_columns = result_df.select_dtypes(
-                            include=["object"]
-                        ).columns
-                        for col in object_columns:
-                            result_df[col] = result_df[col].astype(str)
-                        st.dataframe(result_df)
-
-                    terms_df = pd.DataFrame(
-                        {
-                            "Terms": [
-                                "The Water Flow Forces Calculator, developed by Turnbull Engineering Pty Ltd, estimates design forces on transmission tower footings in accordance with AS 5100.2 Section 16 - Forces Resulting from Water Flow.",
-                                "The tool applies reasonable engineering assumptions, including (but not limited to) a default load factor of 1.3 for the PMF peak flood, reflecting considerations such as climate change, limited redundancy, and inspection/maintenance constraints.",
-                                "By using this tool, you acknowledge that you are appropriately qualified to interpret its outputs. Turnbull Engineering Pty Ltd reserves the right to update, modify, or discontinue the software and documentation without notice.",
-                                "The embedded sheet outlines key assumptions and design input parameters used in the calculations. For bespoke scenarios or custom refinements, please contact Marco.Liang@Turnbullengineering.com.au.",
-                                "",
-                                "Embedded Design Assumptions:",
-                                "- Scour protection is assumed; scour depth is excluded from force calculations.",
-                                "- Wetted area is calculated as the product of water depth and column diameter.",
-                                "- Debris width is assumed to be 20 m.",
-                                "- For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
-                                "- Default load factor is 1.3, actual load factor used for calculations is a parameter.",
-                                "",
-                            ]
-                        }
-                    )
-
-                    # Create parameters dataframe
-                    params_df = pd.DataFrame(
-                        {
-                            "Parameter": [
-                                "Column Diameter (m)",
-                                "Min Debris Mat Depth (m)",
-                                "Max Debris Mat Depth (m)",
-                                "Debris Span (m)",
-                                "Water Drag Coefficient (Cd)",
-                                "Log Mass (kg)",
-                                "Stopping Distance (m)",
-                                "Load Factor",
-                            ],
-                            "Value": [
-                                inputs["column_diameter"],
-                                inputs["min_debris_depth"],
-                                inputs["max_debris_depth"],
-                                20.0,  # Debris span is hard-coded
-                                inputs["cd"],
-                                inputs["log_mass"],
-                                inputs["stopping_distance"],
-                                inputs["load_factor"],
-                            ],
-                        }
-                    )
-
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                        result_df.to_excel(
-                            writer,
-                            sheet_name="Results",
-                            index=False,
-                        )
-
-                        terms_df.to_excel(
-                            writer, sheet_name="Input Parameters", index=False
-                        )
-
-                        params_df.to_excel(
-                            writer,
-                            sheet_name="Input Parameters",
-                            startrow=len(terms_df) + 1,
-                            index=False,
-                        )
-
-                    output.seek(0)
-                    st.download_button(
-                        label="Download Results as Excel",
-                        data=output,
-                        file_name=f"forces_results_{uploaded_file.name}",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-
-                except ValueError as e:
-                    st.error(f"Error processing file: {str(e)}")
-                except Exception as e:
-                    st.error(f"An unexpected error occurred: {str(e)}")
-
         except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
+            st.error(f"Error reading file {uploaded_file.name}: {str(e)}")
+            continue
+
+        try:
+            result_df = process_dataframe(df, inputs)
+        except ValueError as e:
+            st.error(f"Error processing file {uploaded_file.name}: {str(e)}")
+            continue
+        except Exception as e:
+            st.error(
+                f"An unexpected error occurred with file {uploaded_file.name}: {str(e)}"
+            )
+            continue
+
+        # Create terms dataframe
+        terms_df = pd.DataFrame(
+            {
+                "Terms": [
+                    "The Water Flow Forces Calculator, developed by Turnbull Engineering Pty Ltd, estimates design forces on transmission tower footings in accordance with AS 5100.2 Section 16 - Forces Resulting from Water Flow.",
+                    "The tool applies reasonable engineering assumptions, including (but not limited to) a default load factor of 1.3 for the PMF peak flood, reflecting considerations such as climate change, limited redundancy, and inspection/maintenance constraints.",
+                    "By using this tool, you acknowledge that you are appropriately qualified to interpret its outputs. Turnbull Engineering Pty Ltd reserves the right to update, modify, or discontinue the software and documentation without notice.",
+                    "The embedded sheet outlines key assumptions and design input parameters used in the calculations. For bespoke scenarios or custom refinements, please contact Marco.Liang@Turnbullengineering.com.au.",
+                    "",
+                    "Embedded Design Assumptions:",
+                    "- Scour protection is assumed; scour depth is excluded from force calculations.",
+                    "- Wetted area is calculated as the product of water depth and column diameter.",
+                    "- Debris width is assumed to be 20 m.",
+                    "- For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
+                    "- Default load factor is 1.3, actual load factor used for calculations is a parameter.",
+                    "",
+                ]
+            }
+        )
+
+        # Create parameters dataframe
+        params_df = pd.DataFrame(
+            {
+                "Parameter": [
+                    "Column Diameter (m)",
+                    "Min Debris Mat Depth (m)",
+                    "Max Debris Mat Depth (m)",
+                    "Debris Span (m)",
+                    "Water Drag Coefficient (Cd)",
+                    "Log Mass (kg)",
+                    "Stopping Distance (m)",
+                    "Load Factor",
+                ],
+                "Value": [
+                    inputs["column_diameter"],
+                    inputs["min_debris_depth"],
+                    inputs["max_debris_depth"],
+                    20.0,  # Debris span is hard-coded
+                    inputs["cd"],
+                    inputs["log_mass"],
+                    inputs["stopping_distance"],
+                    inputs["load_factor"],
+                ],
+            }
+        )
+
+        # Create Excel file in memory
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            result_df.to_excel(writer, sheet_name="Results", index=False)
+            terms_df.to_excel(writer, sheet_name="Input Parameters", index=False)
+            params_df.to_excel(
+                writer,
+                sheet_name="Input Parameters",
+                startrow=len(terms_df) + 1,
+                index=False,
+            )
+
+        excel_buffer.seek(0)
+        processed_files.append((f"forces_results_{uploaded_file.name}", excel_buffer))
+        all_results_preview.append(result_df)
+
+    if not processed_files:
+        st.error("No files were successfully processed")
+        return
+
+    # Create zip file in memory
+    zip_buffer = BytesIO()
+    with ZipFile(zip_buffer, "w") as zip_file:
+        for filename, excel_buffer in processed_files:
+            zip_file.writestr(filename, excel_buffer.getvalue())
+
+    zip_buffer.seek(0)
+
+    # Show results preview
+    st.success(f"Successfully processed {len(processed_files)} files")
+    st.subheader("Results Preview")
+
+    for i, result_df in enumerate(all_results_preview):
+        st.write(f"**File {i + 1}:**")
+        try:
+            st.dataframe(result_df)
+        except Exception:
+            st.warning(
+                f"Converting problematic columns to string type for File {i + 1}..."
+            )
+            object_columns = result_df.select_dtypes(include=["object"]).columns
+            for col in object_columns:
+                result_df[col] = result_df[col].astype(str)
+            st.dataframe(result_df)
+
+    # Download button for zip file
+    st.download_button(
+        label="Download All Results as Zip",
+        data=zip_buffer,
+        file_name=f"forces_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+        mime="application/zip",
+    )
 
 
 if __name__ == "__main__":
