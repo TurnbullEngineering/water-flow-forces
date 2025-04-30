@@ -7,6 +7,31 @@ from datetime import datetime
 
 getcontext().prec = 28
 
+# Terms and descriptions
+CALCULATOR_DESCRIPTION = """
+The Water Flow Forces Calculator, developed by Turnbull Engineering Pty Ltd, estimates design forces on transmission tower footings in accordance with AS 5100.2 Section 16 - Forces Resulting from Water Flow.
+"""
+
+ENGINEERING_ASSUMPTIONS = """
+The tool applies reasonable engineering assumptions, including (but not limited to) a default load factor of 1.3 for the PMF peak flood, reflecting considerations such as climate change, limited redundancy, and inspection/maintenance constraints.
+"""
+
+LEGAL_TERMS = """
+By using this tool, you acknowledge that you are appropriately qualified to interpret its outputs. Turnbull Engineering Pty Ltd reserves the right to update, modify, or discontinue the software and documentation without notice.
+"""
+
+CONTACT_INFO = """
+The embedded sheet outlines key assumptions and design input parameters used in the calculations. For bespoke scenarios or custom refinements, please contact Marco.Liang@Turnbullengineering.com.au.
+"""
+
+TECHNICAL_ASSUMPTIONS = [
+    "Scour protection is assumed; scour depth is excluded from force calculations.",
+    "Wetted area is calculated as the product of water depth and column diameter.",
+    "Debris width is assumed to be 20 m.",
+    "For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
+    "Default load factor is 1.3, actual load factor used for calculations is a parameter.",
+]
+
 
 def Cd(V: Decimal, y: Decimal) -> Decimal:
     """
@@ -107,8 +132,10 @@ def calculate_forces(
     Ad = water_depth * column_diameter
 
     # Calculate debris mat area (Adeb) for F2
+    # Ensure debris mat depth doesn't exceed water depth
+    effective_debris_depth = min(debris_mat_depth, water_depth)
     debris_span = Decimal("20.0")  # m
-    Adeb = debris_mat_depth * debris_span
+    Adeb = effective_debris_depth * debris_span
 
     # F1 - Water Flow Force
     F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad * load_factor
@@ -117,9 +144,7 @@ def calculate_forces(
     # F2 - Debris Force
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
-    L2 = max(
-        water_depth - (debris_mat_depth / Decimal("2")), water_depth / Decimal("2")
-    )
+    L2 = water_depth - (effective_debris_depth / Decimal("2"))
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
@@ -519,6 +544,17 @@ def main():
     st.pyplot(fig)
 
     st.markdown("---")
+    st.header("Terms and Conditions")
+    st.markdown(CALCULATOR_DESCRIPTION)
+    st.markdown(ENGINEERING_ASSUMPTIONS)
+    st.markdown(LEGAL_TERMS)
+    st.markdown(CONTACT_INFO)
+
+    st.header("Technical Assumptions")
+    for assumption in TECHNICAL_ASSUMPTIONS:
+        st.markdown(f"- {assumption}")
+
+    st.markdown("---")
     st.header("Excel Processing")
     st.markdown(
         """
@@ -565,17 +601,13 @@ def main():
         terms_df = pd.DataFrame(
             {
                 "Terms": [
-                    "The Water Flow Forces Calculator, developed by Turnbull Engineering Pty Ltd, estimates design forces on transmission tower footings in accordance with AS 5100.2 Section 16 - Forces Resulting from Water Flow.",
-                    "The tool applies reasonable engineering assumptions, including (but not limited to) a default load factor of 1.3 for the PMF peak flood, reflecting considerations such as climate change, limited redundancy, and inspection/maintenance constraints.",
-                    "By using this tool, you acknowledge that you are appropriately qualified to interpret its outputs. Turnbull Engineering Pty Ltd reserves the right to update, modify, or discontinue the software and documentation without notice.",
-                    "The embedded sheet outlines key assumptions and design input parameters used in the calculations. For bespoke scenarios or custom refinements, please contact Marco.Liang@Turnbullengineering.com.au.",
+                    CALCULATOR_DESCRIPTION,
+                    ENGINEERING_ASSUMPTIONS,
+                    LEGAL_TERMS,
+                    CONTACT_INFO,
                     "",
                     "Embedded Design Assumptions:",
-                    "- Scour protection is assumed; scour depth is excluded from force calculations.",
-                    "- Wetted area is calculated as the product of water depth and column diameter.",
-                    "- Debris width is assumed to be 20 m.",
-                    "- For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
-                    "- Default load factor is 1.3, actual load factor used for calculations is a parameter.",
+                    *[f"- {assumption}" for assumption in TECHNICAL_ASSUMPTIONS],
                     "",
                 ]
             }
