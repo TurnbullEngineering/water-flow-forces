@@ -100,7 +100,27 @@ def test_calculate_forces_debris_depth_exceeding_water():
     )
 
     # Assert
-    assert result["L2"] == debris_mat_depth / 2
+    # Test that L2 is at half the debris depth
+    assert result["L2"] == debris_mat_depth / 2, (
+        "L2 should be at half the debris mat depth when it exceeds water depth."
+    )
+
+    # Calculate forces with same parameters but water depth is half of original
+    result_with_half_water_depth = calculate_forces(
+        column_diameter,
+        water_depth / Decimal("2"),
+        water_velocity,
+        debris_mat_depth,
+        cd,
+        log_mass,
+        stopping_distance,
+        load_factor,
+    )
+
+    # F2 should be the same in both cases since it's limited by water depth
+    assert result["F2"] == result_with_half_water_depth["F2"], (
+        "F2 should not change with water depth if debris mat depth exceeds water depth."
+    )
 
 
 def test_calculate_forces_validates_inputs():

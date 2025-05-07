@@ -163,6 +163,7 @@ def calculate_forces(
     L1 = water_depth / Decimal("2")
 
     # F2 - Debris Force
+    # Debris depth can exceed water depth, this is a requirement that has been agreed upon
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
     L2 = max(
