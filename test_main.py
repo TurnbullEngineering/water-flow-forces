@@ -1,6 +1,6 @@
 import pytest
 from decimal import Decimal
-from main import calculate_forces, ForceResults
+from main import calculate_forces
 
 
 def test_calculate_forces_normal_case():
