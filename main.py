@@ -4,6 +4,8 @@ import numpy as np
 from decimal import Decimal, getcontext
 from io import BytesIO
 import matplotlib.pyplot as plt
+import matplotlib.figure
+import matplotlib.patches
 from datetime import datetime
 
 getcontext().prec = 28
@@ -111,31 +113,27 @@ def calculate_actual_debris_depth(
 
 
 def calculate_forces(
-    column_diameter,
-    water_depth,
-    water_velocity,
-    debris_mat_depth,
-    cd,
-    log_mass,
-    stopping_distance,
-    load_factor,
-):
-    column_diameter = Decimal(str(column_diameter))
-    water_depth = Decimal(str(water_depth))
-    water_velocity = Decimal(str(water_velocity))
-    debris_mat_depth = Decimal(str(debris_mat_depth))
-    cd = Decimal(str(cd))
-    log_mass = Decimal(str(log_mass))
-    stopping_distance = Decimal(str(stopping_distance))
-    load_factor = Decimal(str(load_factor))
+    column_diameter: Decimal,
+    water_depth: Decimal,
+    water_velocity: Decimal,
+    debris_mat_depth: Decimal,
+    cd: Decimal,
+    log_mass: Decimal,
+    stopping_distance: Decimal,
+    load_factor: Decimal,
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
+    """Calculate forces using Decimal for consistent precision.
+
+    All parameters must be Decimal instances for maximum precision.
+    """
 
     # Calculate wetted area (Ad) for F1
     Ad = water_depth * column_diameter
 
     # Calculate debris mat area (Adeb) for F2
     # Ensure debris mat depth doesn't exceed water depth
-    effective_debris_depth = min(debris_mat_depth, water_depth)
-    debris_span = Decimal("20.0")  # m
+    effective_debris_depth = min(debris_mat_depth, water_depth)  # Already Decimal
+    debris_span = Decimal("20.0")  # m, ensure consistent decimal usage
     Adeb = effective_debris_depth * debris_span
 
     # F1 - Water Flow Force
@@ -149,26 +147,25 @@ def calculate_forces(
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
-    F3 = log_mass * acceleration * load_factor
+    F3 = log_mass * acceleration * load_factor / Decimal("1000")  # Convert to kN
     L3 = water_depth
-
-    F3 = F3 / Decimal("1000")
 
     return F1, L1, F2, L2, F3, L3
 
 
 def draw_column_diagram(
-    water_depth,
-    column_height,
-    column_diameter,
-    debris_mat_depth,
-    F1,
-    F2,
-    F3,
-    L1,
-    L2,
-    L3,
-):
+    water_depth: Decimal,
+    column_height: float,
+    column_diameter: float,
+    debris_mat_depth: Decimal,
+    F1: Decimal,
+    F2: Decimal,
+    F3: Decimal,
+    L1: Decimal,
+    L2: Decimal,
+    L3: Decimal,
+) -> matplotlib.figure.Figure:
+    """Draw the column forces diagram with proper handling of Decimal values."""
     fig, ax = plt.subplots(figsize=(10, 8))
 
     # Ground
@@ -178,7 +175,7 @@ def draw_column_diagram(
     # Column
     column_bottom = ground_level
     column_x = 5  # Center position
-    rect = plt.Rectangle(
+    rect = matplotlib.patches.Rectangle(
         (column_x - column_diameter / 2, column_bottom),
         column_diameter,
         column_height,
@@ -201,7 +198,7 @@ def draw_column_diagram(
         debris_height = water_y - debris_y  # Adjust height to not exceed water level
 
     debris_width = 4  # Visual width for debris
-    rect_debris = plt.Rectangle(
+    rect_debris = matplotlib.patches.Rectangle(
         (column_x - debris_width / 2, debris_y),
         debris_width,
         debris_height,
@@ -319,7 +316,8 @@ def draw_column_diagram(
     return fig
 
 
-def process_dataframe(df: pd.DataFrame, inputs):
+def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
+    """Process the input dataframe and calculate forces using Decimal for precision."""
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
     VELOCITY_COL = "PMF Event Peak Velocity"
@@ -365,21 +363,25 @@ def process_dataframe(df: pd.DataFrame, inputs):
             )
             continue
 
+        # Convert all inputs to Decimal for consistent precision
+        decimal_water_depth = Decimal(str(water_depth))
+        decimal_water_velocity = Decimal(str(water_velocity))
+
         actual_debris_depth = calculate_actual_debris_depth(
-            Decimal(str(water_depth)),
+            decimal_water_depth,
             Decimal(str(inputs["min_debris_depth"])),
             Decimal(str(inputs["max_debris_depth"])),
         )
 
         F1, L1, F2, L2, F3, L3 = calculate_forces(
-            inputs["column_diameter"],
-            water_depth,
-            water_velocity,
-            float(actual_debris_depth),
-            inputs["cd"],
-            inputs["log_mass"],
-            inputs["stopping_distance"],
-            inputs["load_factor"],
+            Decimal(str(inputs["column_diameter"])),
+            decimal_water_depth,
+            decimal_water_velocity,
+            actual_debris_depth,  # Already a Decimal
+            Decimal(str(inputs["cd"])),
+            Decimal(str(inputs["log_mass"])),
+            Decimal(str(inputs["stopping_distance"])),
+            Decimal(str(inputs["load_factor"])),
         )
 
         results.append(
@@ -416,7 +418,7 @@ def main():
     st.sidebar.image("gc-icon.jpeg")
     st.sidebar.header("Structure Parameters")
 
-    inputs = {}
+    inputs = {}  # Dictionary to store all input parameters
     inputs["column_height"] = st.sidebar.number_input(
         "Column Height (m)",
         min_value=0.1,
@@ -520,22 +522,26 @@ def main():
         "These values will be replaced by the Excel columns when processing the file."
     )
 
+    # Convert preview values to Decimal for consistent precision
+    decimal_preview_depth = Decimal(str(preview_depth))
+    decimal_preview_velocity = Decimal(str(preview_velocity))
+
     actual_debris_depth = calculate_actual_debris_depth(
-        Decimal(str(preview_depth)),
+        decimal_preview_depth,
         Decimal(str(inputs["min_debris_depth"])),
         Decimal(str(inputs["max_debris_depth"])),
     )
 
     preview_F1, preview_L1, preview_F2, preview_L2, preview_F3, preview_L3 = (
         calculate_forces(
-            inputs["column_diameter"],
-            preview_depth,
-            preview_velocity,
-            float(actual_debris_depth),
-            inputs["cd"],
-            inputs["log_mass"],
-            inputs["stopping_distance"],
-            inputs["load_factor"],
+            Decimal(str(inputs["column_diameter"])),
+            decimal_preview_depth,
+            decimal_preview_velocity,
+            actual_debris_depth,  # Already a Decimal
+            Decimal(str(inputs["cd"])),
+            Decimal(str(inputs["log_mass"])),
+            Decimal(str(inputs["stopping_distance"])),
+            Decimal(str(inputs["load_factor"])),
         )
     )
 
@@ -559,10 +565,10 @@ def main():
     # Draw and display the diagram
     st.subheader("Force Diagram")
     fig = draw_column_diagram(
-        water_depth=preview_depth,
+        water_depth=decimal_preview_depth,  # Use Decimal value directly
         column_height=inputs["column_height"],
         column_diameter=inputs["column_diameter"],
-        debris_mat_depth=float(actual_debris_depth),
+        debris_mat_depth=actual_debris_depth,  # Already a Decimal
         F1=preview_F1,
         F2=preview_F2,
         F3=preview_F3,
@@ -642,7 +648,7 @@ def main():
             }
         )
 
-        # Create parameters dataframe
+        # Create parameters dataframe with exact values
         params_df = pd.DataFrame(
             {
                 "Parameter": [
@@ -656,14 +662,16 @@ def main():
                     "Load Factor",
                 ],
                 "Value": [
-                    inputs["column_diameter"],
-                    inputs["min_debris_depth"],
-                    inputs["max_debris_depth"],
-                    20.0,  # Debris span is hard-coded
-                    inputs["cd"],
-                    inputs["log_mass"],
-                    inputs["stopping_distance"],
-                    inputs["load_factor"],
+                    str(
+                        Decimal(str(inputs["column_diameter"]))
+                    ),  # Convert to exact decimal string
+                    str(Decimal(str(inputs["min_debris_depth"]))),
+                    str(Decimal(str(inputs["max_debris_depth"]))),
+                    "20.0",  # Debris span is hard-coded
+                    str(Decimal(str(inputs["cd"]))),
+                    str(Decimal(str(inputs["log_mass"]))),
+                    str(Decimal(str(inputs["stopping_distance"]))),
+                    str(Decimal(str(inputs["load_factor"]))),
                 ],
             }
         )
