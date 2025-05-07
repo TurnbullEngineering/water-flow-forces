@@ -7,6 +7,19 @@ import matplotlib.pyplot as plt
 import matplotlib.figure
 import matplotlib.patches
 from datetime import datetime
+from typing import TypedDict
+
+
+class ForceResults(TypedDict):
+    """Type hints for force calculation results."""
+
+    F1: Decimal  # Water Flow Force (kN)
+    L1: Decimal  # Height of F1 application (m)
+    F2: Decimal  # Debris Force (kN)
+    L2: Decimal  # Height of F2 application (m)
+    F3: Decimal  # Log Impact Force (kN)
+    L3: Decimal  # Height of F3 application (m)
+
 
 getcontext().prec = 28
 
@@ -121,20 +134,29 @@ def calculate_forces(
     log_mass: Decimal,
     stopping_distance: Decimal,
     load_factor: Decimal,
-) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
+) -> ForceResults:
     """Calculate forces using Decimal for consistent precision.
 
     All parameters must be Decimal instances for maximum precision.
+
+    Returns
+    -------
+    dict[str, Decimal]
+        Dictionary containing:
+        - F1: Water Flow Force (kN)
+        - L1: Height at which F1 is applied (m)
+        - F2: Debris Force (kN)
+        - L2: Height at which F2 is applied (m)
+        - F3: Log Impact Force (kN)
+        - L3: Height at which F3 is applied (m)
     """
 
     # Calculate wetted area (Ad) for F1
     Ad = water_depth * column_diameter
 
     # Calculate debris mat area (Adeb) for F2
-    # Ensure debris mat depth doesn't exceed water depth
-    effective_debris_depth = min(debris_mat_depth, water_depth)  # Already Decimal
     debris_span = Decimal("20.0")  # m, ensure consistent decimal usage
-    Adeb = effective_debris_depth * debris_span
+    Adeb = debris_mat_depth * debris_span
 
     # F1 - Water Flow Force
     F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad * load_factor
@@ -143,14 +165,23 @@ def calculate_forces(
     # F2 - Debris Force
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
-    L2 = water_depth - (effective_debris_depth / Decimal("2"))
+    L2 = max(
+        water_depth - (debris_mat_depth / Decimal("2")), debris_mat_depth / Decimal("2")
+    )
 
     # F3 - Log Impact Force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
     F3 = log_mass * acceleration * load_factor / Decimal("1000")  # Convert to kN
     L3 = water_depth
 
-    return F1, L1, F2, L2, F3, L3
+    return {
+        "F1": F1,  # Water Flow Force (kN)
+        "L1": L1,  # Height of F1 application (m)
+        "F2": F2,  # Debris Force (kN)
+        "L2": L2,  # Height of F2 application (m)
+        "F3": F3,  # Log Impact Force (kN)
+        "L3": L3,  # Height of F3 application (m)
+    }
 
 
 def draw_column_diagram(
@@ -373,7 +404,7 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             Decimal(str(inputs["max_debris_depth"])),
         )
 
-        F1, L1, F2, L2, F3, L3 = calculate_forces(
+        forces = calculate_forces(
             Decimal(str(inputs["column_diameter"])),
             decimal_water_depth,
             decimal_water_velocity,
@@ -386,12 +417,12 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
 
         results.append(
             {
-                "F1": float(F1),
-                "L1": float(L1),
-                "F2": float(F2),
-                "L2": float(L2),
-                "F3": float(F3),
-                "L3": float(L3),
+                "F1": float(forces["F1"]),
+                "L1": float(forces["L1"]),
+                "F2": float(forces["F2"]),
+                "L2": float(forces["L2"]),
+                "F3": float(forces["F3"]),
+                "L3": float(forces["L3"]),
             }
         )
 
@@ -532,31 +563,29 @@ def main():
         Decimal(str(inputs["max_debris_depth"])),
     )
 
-    preview_F1, preview_L1, preview_F2, preview_L2, preview_F3, preview_L3 = (
-        calculate_forces(
-            Decimal(str(inputs["column_diameter"])),
-            decimal_preview_depth,
-            decimal_preview_velocity,
-            actual_debris_depth,  # Already a Decimal
-            Decimal(str(inputs["cd"])),
-            Decimal(str(inputs["log_mass"])),
-            Decimal(str(inputs["stopping_distance"])),
-            Decimal(str(inputs["load_factor"])),
-        )
+    forces = calculate_forces(
+        Decimal(str(inputs["column_diameter"])),
+        decimal_preview_depth,
+        decimal_preview_velocity,
+        actual_debris_depth,  # Already a Decimal
+        Decimal(str(inputs["cd"])),
+        Decimal(str(inputs["log_mass"])),
+        Decimal(str(inputs["stopping_distance"])),
+        Decimal(str(inputs["load_factor"])),
     )
 
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Forces")
-        st.write(f"**F1 (Water Flow):** {preview_F1:.1f} kN")
-        st.write(f"**F2 (Debris):** {preview_F2:.1f} kN")
-        st.write(f"**F3 (Log Impact):** {preview_F3:.1f} kN")
+        st.write(f"**F1 (Water Flow):** {float(forces['F1']):.1f} kN")
+        st.write(f"**F2 (Debris):** {float(forces['F2']):.1f} kN")
+        st.write(f"**F3 (Log Impact):** {float(forces['F3']):.1f} kN")
 
     with col2:
         st.subheader("Locations")
-        st.write(f"**L1:** {preview_L1:.1f} m")
-        st.write(f"**L2:** {preview_L2:.1f} m")
-        st.write(f"**L3:** {preview_L3:.1f} m")
+        st.write(f"**L1:** {float(forces['L1']):.1f} m")
+        st.write(f"**L2:** {float(forces['L2']):.1f} m")
+        st.write(f"**L3:** {float(forces['L3']):.1f} m")
 
     st.subheader("Load Combinations")
     st.write("**F1 (Water Flow) + F2 (Debris)**")
@@ -569,12 +598,12 @@ def main():
         column_height=inputs["column_height"],
         column_diameter=inputs["column_diameter"],
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
-        F1=preview_F1,
-        F2=preview_F2,
-        F3=preview_F3,
-        L1=preview_L1,
-        L2=preview_L2,
-        L3=preview_L3,
+        F1=forces["F1"],
+        F2=forces["F2"],
+        F3=forces["F3"],
+        L1=forces["L1"],
+        L2=forces["L2"],
+        L3=forces["L3"],
     )
     st.pyplot(fig)
 
