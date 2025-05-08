@@ -156,31 +156,31 @@ def calculate_forces(
         - L3: Height at which F3 is applied (m)
     """
 
-    # Calculate wetted area (Ad) for F1
-    Ad = water_depth * column_diameter
-
-    # Calculate debris mat area (Adeb) for F2
-    debris_span = Decimal("20.0")  # m, ensure consistent decimal usage
-    Adeb = debris_mat_depth * debris_span
-
-    # F1 - Water Flow Force
+    # Calculate pier forces (above ground)
+    Ad = water_depth * column_diameter  # Wetted area for pier
     F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
     L1 = water_depth / Decimal("2")
 
-    # F2 - Debris Force
-    # Debris depth can exceed water depth, this is a requirement that has been agreed upon
+    # Calculate debris forces
+    debris_span = Decimal("20.0")  # m, ensure consistent decimal usage
+    Adeb = debris_mat_depth * debris_span
     C_debris = Cd(water_velocity, water_depth)
     F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
     L2 = max(
         water_depth - (debris_mat_depth / Decimal("2")), debris_mat_depth / Decimal("2")
     )
 
-    # F3 - Log Impact Force
+    # Calculate log impact force
     acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
     F3 = log_mass * acceleration * load_factor / Decimal("1000")  # Convert to kN
     L3 = water_depth
 
-    # Wetted Area for pile
+    if scour_depth < 0 or pile_diameter < 0:
+        raise ValueError("Scour depth and pile diameter must be non-negative.")
+
+    if pile_diameter == 0:
+        pile_diameter = column_diameter
+
     Ad2 = scour_depth * pile_diameter
     # Fd2 - Water Flow Force on pile
     Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
