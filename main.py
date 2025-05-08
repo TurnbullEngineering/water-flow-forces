@@ -178,13 +178,14 @@ def calculate_forces(
     if scour_depth < 0 or pile_diameter < 0:
         raise ValueError("Scour depth and pile diameter must be non-negative.")
 
+    # Use column diameter if no pile diameter specified
     if pile_diameter == 0:
         pile_diameter = column_diameter
 
-    Ad2 = scour_depth * pile_diameter
+    Ad2 = scour_depth * pile_diameter  # Forces only apply to scoured area
     # Fd2 - Water Flow Force on pile
     Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
-    Ld2 = -scour_depth / Decimal("2")
+    Ld2 = -scour_depth / Decimal("2")  # Force acts at midpoint of scoured area
 
     return {
         "F1": F1,  # Water Flow Force (kN)
@@ -200,7 +201,6 @@ def calculate_forces(
 
 def draw_column_diagram(
     water_depth: Decimal,
-    column_height: float,
     column_diameter: float,
     debris_mat_depth: Decimal,
     F1: Decimal,
@@ -209,6 +209,10 @@ def draw_column_diagram(
     L1: Decimal,
     L2: Decimal,
     L3: Decimal,
+    Fd2: Decimal = Decimal("0"),
+    Ld2: Decimal = Decimal("0"),
+    pile_diameter: float = 0.0,
+    scour_depth: float = 0.0,
 ) -> matplotlib.figure.Figure:
     """Draw the column forces diagram with proper handling of Decimal values."""
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -217,13 +221,16 @@ def draw_column_diagram(
     ground_level = 0
     ax.axhline(y=ground_level, color="brown", linestyle="-", linewidth=2)
 
+    # Calculate actual column height first
+    actual_column_height = float(water_depth) + 1.5
+
     # Column
     column_bottom = ground_level
     column_x = 5  # Center position
     rect = matplotlib.patches.Rectangle(
         (column_x - column_diameter / 2, column_bottom),
         column_diameter,
-        column_height,
+        actual_column_height,  # Use actual height derived from water level
         color="gray",
         alpha=0.5,
     )
@@ -320,38 +327,105 @@ def draw_column_diagram(
         verticalalignment="center",
     )
 
-    ax.annotate(
-        "",
-        xy=(column_x - column_diameter / 2 - 2, ground_level),
-        xytext=(
-            column_x - column_diameter / 2 - 2,
-            ground_level + float(column_height),
-        ),
-        arrowprops=dict(arrowstyle="<->"),
-    )
-    ax.text(
-        column_x - column_diameter / 2 - 2.5,
-        ground_level + float(column_height) / 2,
-        f"Column Height\n{float(column_height):.1f} m",
-        verticalalignment="center",
-    )
+    # Add column height indicator
 
+    # Pier diameter indicator (above ground)
     ax.annotate(
         "",
-        xy=(column_x - column_diameter / 2, ground_level - 0.5),
-        xytext=(column_x + column_diameter / 2, ground_level - 0.5),
+        xy=(column_x - column_diameter / 2, water_y - 0.5),
+        xytext=(column_x + column_diameter / 2, water_y - 0.5),
         arrowprops=dict(arrowstyle="<->"),
     )
     ax.text(
         column_x,
-        ground_level - 1,
-        f"Diameter\n{float(column_diameter):.1f} m",
+        water_y - 1,
+        f"Pier Diameter\n{float(column_diameter):.1f} m",
         horizontalalignment="center",
     )
 
-    # Set limits and labels
+    # Initialize variables used later for ylim
+    actual_scour = 0.0
+    pile_depth = 0.0
+
+    # Draw pile and scour
+    if pile_diameter > 0:
+        # Scour depth as provided
+        actual_scour = float(scour_depth)
+        # Pile extends 1.5m below scour depth
+        pile_depth = actual_scour + 1.5
+
+        # Draw scour indicator
+        ax.annotate(
+            "",
+            xy=(column_x - pile_diameter / 2 - 3, ground_level - actual_scour),
+            xytext=(column_x - pile_diameter / 2 - 3, ground_level),
+            arrowprops=dict(arrowstyle="<->"),
+        )
+        ax.text(
+            column_x - pile_diameter / 2 - 3.5,
+            ground_level - actual_scour / 2,
+            f"Scour\nDepth\n{actual_scour:.1f} m",
+            verticalalignment="center",
+        )
+
+        # Pile
+        pile_rect = matplotlib.patches.Rectangle(
+            (column_x - pile_diameter / 2, ground_level - pile_depth),
+            pile_diameter,
+            pile_depth,
+            color="darkgray",
+            alpha=0.5,
+        )
+        ax.add_patch(pile_rect)
+
+        # Fd2 at Ld2 (below ground)
+        if float(Fd2) > 0:
+            ax.arrow(
+                column_x + pile_diameter / 2 + 1,
+                ground_level + float(Ld2),  # Ld2 is negative
+                2,
+                0,
+                **arrow_props,
+            )
+            ax.text(
+                column_x + pile_diameter / 2 + 3.5,
+                ground_level + float(Ld2),
+                f"Fd2 = {float(Fd2):.1f} kN @ Ld2 = {float(Ld2):.1f} m",
+                verticalalignment="center",
+            )
+
+        # Pile diameter indicator (below ground)
+        ax.annotate(
+            "",
+            xy=(column_x - pile_diameter / 2, ground_level - 0.5),
+            xytext=(column_x + pile_diameter / 2, ground_level - 0.5),
+            arrowprops=dict(arrowstyle="<->"),
+        )
+        ax.text(
+            column_x,
+            ground_level - 1,
+            f"Pile Diameter\n{float(pile_diameter):.1f} m",
+            horizontalalignment="center",
+        )
+
+        # Scour/pile depth indicator
+        ax.annotate(
+            "",
+            xy=(column_x - pile_diameter / 2 - 3, ground_level - actual_scour),
+            xytext=(column_x - pile_diameter / 2 - 3, ground_level),
+            arrowprops=dict(arrowstyle="<->"),
+        )
+        ax.text(
+            column_x - pile_diameter / 2 - 3.5,
+            ground_level - actual_scour / 2,
+            f"Pile\nDepth\n{actual_scour:.1f} m",
+            verticalalignment="center",
+        )
+
+    # Set limits and labels with adjusted ylim for pile
     ax.set_xlim(0, 10)
-    ax.set_ylim(ground_level - 1.5, max(float(column_height), float(water_depth)) + 1)
+    min_y = min(ground_level - 1.5, ground_level - pile_depth - 0.5)
+    ax.set_ylim(min_y, actual_column_height + 0.5)
     ax.set_xlabel("Width (m)")
     ax.set_ylabel("Height (m)")
     ax.set_title("Column Forces Diagram")
@@ -369,15 +443,19 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     event = inputs["selected_event"]  # e.g. "1% AEP" or "PMF"
     VELOCITY_COL = f"{event} Event Peak Velocity"
     DEPTH_COL = f"{event} Event Peak Flood Depth"
+    SCOUR_COL = f"{event} Event Scour"
 
     missing_cols = []
     if VELOCITY_COL not in df.columns:
         missing_cols.append(VELOCITY_COL)
     if DEPTH_COL not in df.columns:
         missing_cols.append(DEPTH_COL)
+    if SCOUR_COL not in df.columns:
+        missing_cols.append(SCOUR_COL)
 
     df[VELOCITY_COL] = pd.to_numeric(df[VELOCITY_COL], errors="coerce")
     df[DEPTH_COL] = pd.to_numeric(df[DEPTH_COL], errors="coerce")
+    df[SCOUR_COL] = pd.to_numeric(df[SCOUR_COL], errors="coerce")
 
     if missing_cols:
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
@@ -392,9 +470,14 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     for idx, row in df.iterrows():
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
+        scour_depth = row[SCOUR_COL]
 
-        # If either value is invalid, output N/A for all results
-        if is_invalid_value(water_depth) or is_invalid_value(water_velocity):
+        # If any value is invalid, output N/A for all results
+        if (
+            is_invalid_value(water_depth)
+            or is_invalid_value(water_velocity)
+            or is_invalid_value(scour_depth)
+        ):
             print(type(water_depth), type(water_velocity))
             print(water_depth, water_velocity)
             print("Invalid values detected, skipping row.")
@@ -406,6 +489,8 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
                     "L2": "N/A",
                     "F3": "N/A",
                     "L3": "N/A",
+                    "Fd2": "N/A",
+                    "Ld2": "N/A",
                 }
             )
             continue
@@ -413,11 +498,19 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
         # Convert all inputs to Decimal for consistent precision
         decimal_water_depth = Decimal(str(water_depth))
         decimal_water_velocity = Decimal(str(water_velocity))
+        decimal_scour_depth = Decimal(str(scour_depth))
 
         actual_debris_depth = calculate_actual_debris_depth(
             decimal_water_depth,
             Decimal(str(inputs["min_debris_depth"])),
             Decimal(str(inputs["max_debris_depth"])),
+        )
+
+        # Use actual scour depth from Excel data, but column_diameter for pile if no pile_diameter specified
+        actual_pile_diameter = (
+            Decimal(str(inputs["pile_diameter"]))
+            if float(inputs["pile_diameter"]) > 0
+            else Decimal(str(inputs["column_diameter"]))
         )
 
         forces = calculate_forces(
@@ -429,6 +522,9 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             Decimal(str(inputs["log_mass"])),
             Decimal(str(inputs["stopping_distance"])),
             Decimal(str(inputs["load_factor"])),
+            actual_pile_diameter,
+            Decimal(str(inputs["cd_pile"])),
+            decimal_scour_depth,  # Use scour depth from Excel data
         )
 
         results.append(
@@ -439,6 +535,8 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
                 "L2": float(forces["L2"]),
                 "F3": float(forces["F3"]),
                 "L3": float(forces["L3"]),
+                "Fd2": float(forces["Fd2"]),
+                "Ld2": float(forces["Ld2"]),
             }
         )
 
@@ -481,16 +579,6 @@ def main():
     }  # Dictionary to store all input parameters
 
     # Structure parameters
-    column_height = st.sidebar.number_input(
-        "Column Height (m)",
-        min_value=0.1,
-        max_value=30.0,
-        value=8.0,
-        step=0.1,
-        help="Default: 8.0m",
-    )
-    inputs["column_height"] = str(column_height)
-
     column_diameter = st.sidebar.number_input(
         "Column Diameter (m)",
         min_value=0.1,
@@ -502,10 +590,12 @@ def main():
     inputs["column_diameter"] = str(column_diameter)
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("#### Preview Parameters (will be overridden by Excel data)")
+    st.sidebar.markdown("#### Preview Parameters")
+    st.sidebar.markdown("*(Will be overridden by Excel data)*")
 
+    # Group preview parameters together
     preview_depth = st.sidebar.number_input(
-        "Water Depth (m) - Preview Only",
+        "Water Depth (m)",
         min_value=0.1,
         max_value=20.0,
         value=8.0,
@@ -514,13 +604,51 @@ def main():
     )
 
     preview_velocity = st.sidebar.number_input(
-        "Water Velocity (m/s) - Preview Only",
+        "Water Velocity (m/s)",
         min_value=0.1,
         max_value=10.0,
         value=3.0,
         step=0.1,
         help=f"Will be replaced by '{selected_event} Event Peak Velocity' from Excel",
     )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("#### Pile Parameters")
+
+    # Using the same column diameter for pile by default
+    pile_diameter = st.sidebar.number_input(
+        "Pile Diameter (m)",
+        min_value=0.0,
+        max_value=10.0,
+        value=2.5,  # Default same as column
+        step=0.1,
+        help="Diameter of the pile (defaults to column diameter)",
+    )
+    inputs["pile_diameter"] = str(pile_diameter)
+
+    cd_pile = st.sidebar.number_input(
+        "Pile Drag Coefficient (Cd)",
+        min_value=0.0,
+        max_value=2.0,
+        value=0.7,  # Default same as column
+        step=0.1,
+        help="Drag coefficient for pile (defaults to column Cd)",
+    )
+    inputs["cd_pile"] = str(cd_pile)
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("#### Diagram Visualization Parameters")
+    st.sidebar.markdown("*These parameters only affect the diagram visualization*")
+
+    viz_scour_depth = st.sidebar.number_input(
+        "Visualization Scour Depth (m)",
+        min_value=0.0,
+        max_value=20.0,
+        value=5.0,  # Default 5.0m for diagram
+        step=0.1,
+        help="Depth below ground level shown in diagram (does not affect calculations)",
+    )
+    inputs["scour_depth"] = str(viz_scour_depth)  # Only used for diagram
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
@@ -602,6 +730,16 @@ def main():
         Decimal(str(inputs["max_debris_depth"])),
     )
 
+    # For preview, assume a scour depth of 0 since it comes from Excel normally
+    preview_scour_depth = Decimal("0")  # Preview assumes no scour
+
+    # Setup pile diameter - use column diameter if no pile diameter specified
+    actual_pile_diameter = (
+        Decimal(str(inputs["pile_diameter"]))
+        if float(inputs["pile_diameter"]) > 0
+        else Decimal(str(inputs["column_diameter"]))
+    )
+
     forces = calculate_forces(
         Decimal(str(inputs["column_diameter"])),
         decimal_preview_depth,
@@ -611,20 +749,33 @@ def main():
         Decimal(str(inputs["log_mass"])),
         Decimal(str(inputs["stopping_distance"])),
         Decimal(str(inputs["load_factor"])),
+        actual_pile_diameter,
+        Decimal(str(inputs["cd_pile"])),
+        preview_scour_depth,  # Use zero for preview since scour comes from Excel
     )
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.subheader("Forces")
         st.write(f"**F1 (Water Flow):** {float(forces['F1']):.1f} kN")
         st.write(f"**F2 (Debris):** {float(forces['F2']):.1f} kN")
         st.write(f"**F3 (Log Impact):** {float(forces['F3']):.1f} kN")
+        st.write(f"**Fd2 (Pile Flow):** {float(forces['Fd2']):.1f} kN")
 
     with col2:
         st.subheader("Locations")
         st.write(f"**L1:** {float(forces['L1']):.1f} m")
         st.write(f"**L2:** {float(forces['L2']):.1f} m")
         st.write(f"**L3:** {float(forces['L3']):.1f} m")
+        st.write(f"**Ld2:** {float(forces['Ld2']):.1f} m")
+
+    with col3:
+        st.subheader("Pile Status")
+        pile_status = "Inactive" if float(forces["Fd2"]) == 0 else "Active"
+        st.write(f"**Status:** {pile_status}")
+        if pile_status == "Active":
+            st.write(f"**Pile Diameter:** {float(inputs['pile_diameter']):.1f} m")
+            st.write(f"**Scour Depth:** {float(inputs['scour_depth']):.1f} m")
 
     st.subheader("Load Combinations")
     st.write("**F1 (Water Flow) + F2 (Debris)**")
@@ -634,7 +785,6 @@ def main():
     st.subheader("Force Diagram")
     fig = draw_column_diagram(
         water_depth=decimal_preview_depth,  # Use Decimal value directly
-        column_height=float(inputs["column_height"]),
         column_diameter=float(inputs["column_diameter"]),
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
         F1=forces["F1"],
@@ -643,6 +793,10 @@ def main():
         L1=forces["L1"],
         L2=forces["L2"],
         L3=forces["L3"],
+        Fd2=forces["Fd2"],
+        Ld2=forces["Ld2"],
+        pile_diameter=float(inputs["pile_diameter"]),
+        scour_depth=float(inputs["scour_depth"]),
     )
     st.pyplot(fig)
 
@@ -664,8 +818,9 @@ def main():
         Upload Excel files with the following required columns:
         - **{selected_event} Event Peak Flood Depth**: Will replace the preview water depth
         - **{selected_event} Event Peak Velocity**: Will replace the preview water velocity
+        - **{selected_event} Event Scour**: Will be used for pile force calculations
         
-        Other parameters (including debris mat depth) will use the values from the sliders.
+        Other parameters will use the values from the sliders.
         All files will be processed automatically and available for download as a zip file.
         """
     )
@@ -729,6 +884,9 @@ def main():
                     "Log Mass (kg)",
                     "Stopping Distance (m)",
                     "Load Factor",
+                    "Pile Diameter (m)",
+                    "Pile Drag Coefficient (Cd)",
+                    "Scour Depth (m)",
                 ],
                 "Value": [
                     inputs["selected_event"],
@@ -742,6 +900,9 @@ def main():
                     str(Decimal(str(inputs["log_mass"]))),
                     str(Decimal(str(inputs["stopping_distance"]))),
                     str(Decimal(str(inputs["load_factor"]))),
+                    str(Decimal(str(inputs["pile_diameter"]))),
+                    str(Decimal(str(inputs["cd_pile"]))),
+                    str(Decimal(str(inputs["scour_depth"]))),
                 ],
             }
         )
