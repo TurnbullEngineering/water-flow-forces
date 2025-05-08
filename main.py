@@ -185,6 +185,7 @@ def calculate_forces(
     Ad2 = scour_depth * pile_diameter  # Forces only apply to scoured area
     # Fd2 - Water Flow Force on pile
     Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
+    print(f"Scour depth: {scour_depth}, pile diameter: {pile_diameter}")
     Ld2 = -scour_depth / Decimal("2")  # Force acts at midpoint of scoured area
 
     return {
@@ -730,8 +731,7 @@ def main():
         Decimal(str(inputs["max_debris_depth"])),
     )
 
-    # For preview, assume a scour depth of 0 since it comes from Excel normally
-    preview_scour_depth = Decimal("0")  # Preview assumes no scour
+    preview_scour_depth = Decimal(str(inputs["scour_depth"]))
 
     # Setup pile diameter - use column diameter if no pile diameter specified
     actual_pile_diameter = (
@@ -751,16 +751,18 @@ def main():
         Decimal(str(inputs["load_factor"])),
         actual_pile_diameter,
         Decimal(str(inputs["cd_pile"])),
-        preview_scour_depth,  # Use zero for preview since scour comes from Excel
+        preview_scour_depth,
     )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.subheader("Forces")
-        st.write(f"**F1 (Water Flow):** {float(forces['F1']):.1f} kN")
+        st.write(f"**F1 (Water Flow on Pier):** {float(forces['F1']):.1f} kN per pier")
         st.write(f"**F2 (Debris):** {float(forces['F2']):.1f} kN")
         st.write(f"**F3 (Log Impact):** {float(forces['F3']):.1f} kN")
-        st.write(f"**Fd2 (Pile Flow):** {float(forces['Fd2']):.1f} kN")
+        st.write(
+            f"**Fd2 (Water Flow on Pile ):** {float(forces['Fd2']):.1f} kN per pile"
+        )
 
     with col2:
         st.subheader("Locations")
@@ -768,14 +770,6 @@ def main():
         st.write(f"**L2:** {float(forces['L2']):.1f} m")
         st.write(f"**L3:** {float(forces['L3']):.1f} m")
         st.write(f"**Ld2:** {float(forces['Ld2']):.1f} m")
-
-    with col3:
-        st.subheader("Pile Status")
-        pile_status = "Inactive" if float(forces["Fd2"]) == 0 else "Active"
-        st.write(f"**Status:** {pile_status}")
-        if pile_status == "Active":
-            st.write(f"**Pile Diameter:** {float(inputs['pile_diameter']):.1f} m")
-            st.write(f"**Scour Depth:** {float(inputs['scour_depth']):.1f} m")
 
     st.subheader("Load Combinations")
     st.write("**F1 (Water Flow) + F2 (Debris)**")
