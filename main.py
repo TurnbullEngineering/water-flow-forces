@@ -13,12 +13,14 @@ from typing import TypedDict
 class ForceResults(TypedDict):
     """Type hints for force calculation results."""
 
-    F1: Decimal  # Water Flow Force (kN)
+    F1: Decimal  # Water Flow Force on pier (kN)
     L1: Decimal  # Height of F1 application (m)
     F2: Decimal  # Debris Force (kN)
     L2: Decimal  # Height of F2 application (m)
     F3: Decimal  # Log Impact Force (kN)
     L3: Decimal  # Height of F3 application (m)
+    Fd2: Decimal  # Water Flow Force on pile (kN)
+    Ld2: Decimal  # Height of Fd2 application, must be negative (m)
 
 
 getcontext().prec = 28
@@ -130,10 +132,13 @@ def calculate_forces(
     water_depth: Decimal,
     water_velocity: Decimal,
     debris_mat_depth: Decimal,
-    cd: Decimal,
+    cd_pier: Decimal,
     log_mass: Decimal,
     stopping_distance: Decimal,
     load_factor: Decimal,
+    pile_diameter: Decimal = Decimal("0"),
+    cd_pile: Decimal = Decimal("0"),
+    scour_depth: Decimal = Decimal("0"),
 ) -> ForceResults:
     """Calculate forces using Decimal for consistent precision.
 
@@ -159,7 +164,7 @@ def calculate_forces(
     Adeb = debris_mat_depth * debris_span
 
     # F1 - Water Flow Force
-    F1 = Decimal("0.5") * cd * (water_velocity**2) * Ad * load_factor
+    F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
     L1 = water_depth / Decimal("2")
 
     # F2 - Debris Force
@@ -175,6 +180,12 @@ def calculate_forces(
     F3 = log_mass * acceleration * load_factor / Decimal("1000")  # Convert to kN
     L3 = water_depth
 
+    # Wetted Area for pile
+    Ad2 = scour_depth * pile_diameter
+    # Fd2 - Water Flow Force on pile
+    Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
+    Ld2 = -scour_depth / Decimal("2")
+
     return {
         "F1": F1,  # Water Flow Force (kN)
         "L1": L1,  # Height of F1 application (m)
@@ -182,6 +193,8 @@ def calculate_forces(
         "L2": L2,  # Height of F2 application (m)
         "F3": F3,  # Log Impact Force (kN)
         "L3": L3,  # Height of F3 application (m)
+        "Fd2": Fd2,  # Water Flow Force on pile (kN)
+        "Ld2": Ld2,  # Height of Fd2 application (m)
     }
 
 
@@ -352,8 +365,10 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     """Process the input dataframe and calculate forces using Decimal for precision."""
     df.columns = df.columns.str.replace("\n", " ").str.strip()
 
-    VELOCITY_COL = "PMF Event Peak Velocity"
-    DEPTH_COL = "PMF Event Peak Flood Depth"
+    # Use selected event for column names
+    event = inputs["selected_event"]  # e.g. "1% AEP" or "PMF"
+    VELOCITY_COL = f"{event} Event Peak Velocity"
+    DEPTH_COL = f"{event} Event Peak Flood Depth"
 
     missing_cols = []
     if VELOCITY_COL not in df.columns:
@@ -448,10 +463,25 @@ def main():
     st.title("Water Flow Forces Calculator")
 
     st.sidebar.image("gc-icon.jpeg")
+    st.sidebar.header("Event Selection")
+
+    # Event selection dropdown
+    events = ["10% AEP", "1% AEP", "0.5% AEP", "0.2% AEP", "0.05% AEP", "PMF"]
+    selected_event = st.sidebar.selectbox(
+        "Select Event",
+        events,
+        index=1,  # Default to 1% AEP
+        help="Choose the event to analyze",
+    )
+
     st.sidebar.header("Structure Parameters")
 
-    inputs = {}  # Dictionary to store all input parameters
-    inputs["column_height"] = st.sidebar.number_input(
+    inputs = {
+        "selected_event": selected_event
+    }  # Dictionary to store all input parameters
+
+    # Structure parameters
+    column_height = st.sidebar.number_input(
         "Column Height (m)",
         min_value=0.1,
         max_value=30.0,
@@ -459,8 +489,9 @@ def main():
         step=0.1,
         help="Default: 8.0m",
     )
+    inputs["column_height"] = str(column_height)
 
-    inputs["column_diameter"] = st.sidebar.number_input(
+    column_diameter = st.sidebar.number_input(
         "Column Diameter (m)",
         min_value=0.1,
         max_value=10.0,
@@ -468,6 +499,7 @@ def main():
         step=0.1,
         help="Default: 2.5m",
     )
+    inputs["column_diameter"] = str(column_diameter)
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Preview Parameters (will be overridden by Excel data)")
@@ -478,7 +510,7 @@ def main():
         max_value=20.0,
         value=8.0,
         step=0.1,
-        help="Will be replaced by 'PMF Event Peak Flood Depth' from Excel",
+        help=f"Will be replaced by '{selected_event} Event Peak Flood Depth' from Excel",
     )
 
     preview_velocity = st.sidebar.number_input(
@@ -487,13 +519,13 @@ def main():
         max_value=10.0,
         value=3.0,
         step=0.1,
-        help="Will be replaced by 'PMF Event Peak Velocity' from Excel",
+        help=f"Will be replaced by '{selected_event} Event Peak Velocity' from Excel",
     )
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
 
-    inputs["min_debris_depth"] = st.sidebar.number_input(
+    min_debris_depth = st.sidebar.number_input(
         "Min Debris Mat Depth (m)",
         min_value=0.1,
         max_value=10.0,
@@ -501,17 +533,19 @@ def main():
         step=0.1,
         help="Minimum depth of debris mat",
     )
+    inputs["min_debris_depth"] = str(min_debris_depth)
 
-    inputs["max_debris_depth"] = st.sidebar.number_input(
+    max_debris_depth = st.sidebar.number_input(
         "Max Debris Mat Depth (m)",
-        min_value=inputs["min_debris_depth"],
+        min_value=min_debris_depth,
         max_value=10.0,
         value=3.0,
         step=0.1,
         help="Maximum depth of debris mat",
     )
+    inputs["max_debris_depth"] = str(max_debris_depth)
 
-    inputs["cd"] = st.sidebar.number_input(
+    cd = st.sidebar.number_input(
         "Water Drag Coefficient on Column (Cd)",
         min_value=0.1,
         max_value=2.0,
@@ -519,8 +553,9 @@ def main():
         step=0.1,
         help="Default: 0.7 (semi-circular)",
     )
+    inputs["cd"] = str(cd)
 
-    inputs["log_mass"] = st.sidebar.number_input(
+    log_mass = st.sidebar.number_input(
         "Log Mass (kg)",
         min_value=100,
         max_value=20000,
@@ -528,8 +563,9 @@ def main():
         step=100,
         help="Default: 10000kg (10 tons)",
     )
+    inputs["log_mass"] = str(log_mass)
 
-    inputs["stopping_distance"] = st.sidebar.number_input(
+    stopping_distance = st.sidebar.number_input(
         "Stopping Distance (m)",
         min_value=0.001,
         max_value=1.0,
@@ -538,8 +574,9 @@ def main():
         format="%.3f",
         help="Default: 0.025m (25mm)",
     )
+    inputs["stopping_distance"] = str(stopping_distance)
 
-    inputs["load_factor"] = st.sidebar.number_input(
+    load_factor = st.sidebar.number_input(
         "Load Factor",
         min_value=0.1,
         max_value=3.0,
@@ -547,6 +584,7 @@ def main():
         step=0.1,
         help="Safety factor applied to all forces (Default: 1.3)",
     )
+    inputs["load_factor"] = str(load_factor)
 
     st.header("Preview Calculation")
     st.info(
@@ -596,8 +634,8 @@ def main():
     st.subheader("Force Diagram")
     fig = draw_column_diagram(
         water_depth=decimal_preview_depth,  # Use Decimal value directly
-        column_height=inputs["column_height"],
-        column_diameter=inputs["column_diameter"],
+        column_height=float(inputs["column_height"]),
+        column_diameter=float(inputs["column_diameter"]),
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
         F1=forces["F1"],
         F2=forces["F2"],
@@ -622,10 +660,10 @@ def main():
     st.markdown("---")
     st.header("Excel Processing")
     st.markdown(
-        """
+        f"""
         Upload Excel files with the following required columns:
-        - **PMF Event Peak Flood Depth**: Will replace the preview water depth
-        - **PMF Event Peak Velocity**: Will replace the preview water velocity
+        - **{selected_event} Event Peak Flood Depth**: Will replace the preview water depth
+        - **{selected_event} Event Peak Velocity**: Will replace the preview water velocity
         
         Other parameters (including debris mat depth) will use the values from the sliders.
         All files will be processed automatically and available for download as a zip file.
@@ -682,6 +720,7 @@ def main():
         params_df = pd.DataFrame(
             {
                 "Parameter": [
+                    "Selected Event",
                     "Column Diameter (m)",
                     "Min Debris Mat Depth (m)",
                     "Max Debris Mat Depth (m)",
@@ -692,6 +731,7 @@ def main():
                     "Load Factor",
                 ],
                 "Value": [
+                    inputs["selected_event"],
                     str(
                         Decimal(str(inputs["column_diameter"]))
                     ),  # Convert to exact decimal string
