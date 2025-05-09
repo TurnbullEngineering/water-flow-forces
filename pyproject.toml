@@ -23,3 +23,9 @@ python_files = ["test_*.py"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project.scripts]
+water-flow-forces = "main:main"
