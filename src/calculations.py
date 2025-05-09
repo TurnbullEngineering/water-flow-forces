@@ -1,8 +1,8 @@
 """Core calculation functions for the Water Flow Forces Calculator."""
 
 from decimal import Decimal
-from .models import ForceResults
-from .constants import DEBRIS_SPAN
+from .models import ForceResults, PierConfig, BoredPileConfig, LegConfig
+from .constants import DEBRIS_SPAN, LegType
 
 
 def Cd(V: Decimal, y: Decimal) -> Decimal:
@@ -81,7 +81,8 @@ def calculate_actual_debris_depth(
 
 
 def calculate_forces(
-    column_diameter: Decimal,
+    leg_type: LegType,
+    leg_config: LegConfig,
     water_depth: Decimal,
     water_velocity: Decimal,
     debris_mat_depth: Decimal,
@@ -98,8 +99,10 @@ def calculate_forces(
 
     Parameters
     ----------
-    column_diameter : Decimal
-        Diameter of the pier/column (m)
+    leg_type : LegType
+        Type of leg (PIER or BORED_PILE)
+    leg_config : LegConfig
+        Configuration for the leg type (PierConfig or BoredPileConfig)
     water_depth : Decimal
         Depth of water (m)
     water_velocity : Decimal
@@ -130,13 +133,27 @@ def calculate_forces(
     ------
     ValueError
         If scour_depth or pile_diameter is negative
+    TypeError
+        If leg_config doesn't match leg_type
     """
-    # Calculate pier forces (above ground)
-    Ad = water_depth * column_diameter  # Wetted area for pier
-    F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
-    L1 = water_depth / Decimal("2")
+    # Calculate above-ground forces based on leg type
+    if leg_type == LegType.PIER:
+        # Pier type: use diameter and water depth for wetted area
+        if not isinstance(leg_config, dict) or "diameter" not in leg_config:
+            raise TypeError("Pier type requires PierConfig with diameter")
+        column_diameter = leg_config["diameter"]
+        Ad = water_depth * column_diameter
+        F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
+        L1 = water_depth / Decimal("2")  # Mid-height for pier type
+    else:
+        # Bored pile type: use explicit area and 2/3 water depth
+        if not isinstance(leg_config, dict) or "area" not in leg_config:
+            raise TypeError("Bored pile type requires BoredPileConfig with area")
+        Ad = leg_config["area"]
+        F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
+        L1 = (Decimal("2") * water_depth) / Decimal("3")  # 2/3 height for bored pile
 
-    # Calculate debris forces
+    # Calculate debris forces (same for both types)
     debris_span = Decimal(str(DEBRIS_SPAN))  # m
     Adeb = debris_mat_depth * debris_span
     C_debris = Cd(water_velocity, water_depth)
@@ -154,8 +171,15 @@ def calculate_forces(
         raise ValueError("Scour depth and pile diameter must be non-negative.")
 
     # Use column diameter if no pile diameter specified
+    # Validate and get pile diameter
     if pile_diameter == 0:
-        pile_diameter = column_diameter
+        if leg_type == LegType.PIER:
+            if isinstance(leg_config, dict) and "diameter" in leg_config:
+                pile_diameter = leg_config["diameter"]  # type: ignore
+            else:
+                raise TypeError("Pier type requires PierConfig with diameter")
+        else:  # BORED_PILE
+            raise ValueError("Pile diameter must be specified for bored pile type")
 
     Ad2 = scour_depth * pile_diameter  # Forces only apply to scoured area
     # Fd2 - Water Flow Force on pile

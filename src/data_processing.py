@@ -4,6 +4,8 @@ from decimal import Decimal
 import pandas as pd
 import numpy as np
 from .calculations import calculate_forces, calculate_actual_debris_depth
+from .constants import LegType
+from .models import PierConfig, BoredPileConfig
 
 
 def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
@@ -17,7 +19,9 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     inputs : dict
         Dictionary of input parameters including:
         - selected_event: str, e.g. "1% AEP" or "PMF"
-        - column_diameter: str
+        - leg_type: LegType
+        - column_diameter: str (for pier type)
+        - wetted_area: str (for bored pile type)
         - cd: str
         - pile_diameter: str
         - cd_pile: str
@@ -68,6 +72,17 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             return True
         return False
 
+    # Convert string leg type back to enum
+    leg_type = LegType(int(inputs["leg_type"]))
+
+    # Set up leg configuration based on type
+    if leg_type == LegType.PIER:
+        pier_config: PierConfig = {"diameter": Decimal(str(inputs["column_diameter"]))}
+        leg_config = pier_config
+    else:  # BORED_PILE
+        bored_config: BoredPileConfig = {"area": Decimal(str(inputs["wetted_area"]))}
+        leg_config = bored_config
+
     for idx, row in df.iterrows():
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
@@ -104,25 +119,21 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             Decimal(str(inputs["max_debris_depth"])),
         )
 
-        # Use actual scour depth from Excel data, but column_diameter for pile if no pile_diameter specified
-        actual_pile_diameter = (
-            Decimal(str(inputs["pile_diameter"]))
-            if float(inputs["pile_diameter"]) > 0
-            else Decimal(str(inputs["column_diameter"]))
-        )
+        pile_diameter = Decimal(str(inputs["pile_diameter"]))
 
         forces = calculate_forces(
-            Decimal(str(inputs["column_diameter"])),
-            decimal_water_depth,
-            decimal_water_velocity,
-            actual_debris_depth,  # Already a Decimal
-            Decimal(str(inputs["cd"])),
-            Decimal(str(inputs["log_mass"])),
-            Decimal(str(inputs["stopping_distance"])),
-            Decimal(str(inputs["load_factor"])),
-            actual_pile_diameter,
-            Decimal(str(inputs["cd_pile"])),
-            decimal_scour_depth,  # Use scour depth from Excel data
+            leg_type=leg_type,
+            leg_config=leg_config,
+            water_depth=decimal_water_depth,
+            water_velocity=decimal_water_velocity,
+            debris_mat_depth=actual_debris_depth,  # Already a Decimal
+            cd_pier=Decimal(str(inputs["cd"])),
+            log_mass=Decimal(str(inputs["log_mass"])),
+            stopping_distance=Decimal(str(inputs["stopping_distance"])),
+            load_factor=Decimal(str(inputs["load_factor"])),
+            pile_diameter=pile_diameter,
+            cd_pile=Decimal(str(inputs["cd_pile"])),
+            scour_depth=decimal_scour_depth,  # Use scour depth from Excel data
         )
 
         results.append(

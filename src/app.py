@@ -25,10 +25,15 @@ from .constants import (
     LEGAL_TERMS,
     CONTACT_INFO,
     TECHNICAL_ASSUMPTIONS,
+    LegType,
+    LEG_TYPE_NAMES,
+    CD_VALUES,
+    CD_PILE_VALUES,
 )
 from .calculations import calculate_forces, calculate_actual_debris_depth
 from .visualization import draw_column_diagram
 from .data_processing import process_dataframe
+from .models import PierConfig, BoredPileConfig
 
 # Set decimal precision
 getcontext().prec = 28
@@ -55,45 +60,78 @@ def main():
         "selected_event": selected_event
     }  # Dictionary to store all input parameters
 
-    # Structure parameters
-    column_diameter = st.sidebar.number_input(
-        "Column Diameter (m)",
-        min_value=0.1,
-        max_value=10.0,
-        value=DEFAULT_COLUMN_DIAMETER,
-        step=0.1,
-        help=f"Default: {DEFAULT_COLUMN_DIAMETER}m",
+    # Structure type selection
+    leg_type = st.sidebar.selectbox(
+        "Structure Type",
+        list(LEG_TYPE_NAMES.keys()),
+        format_func=lambda x: LEG_TYPE_NAMES[x],
+        help="Choose the type of structure",
     )
-    inputs["column_diameter"] = str(column_diameter)
+    # Store leg type value as string for serialization
+    inputs["leg_type"] = str(leg_type.value)
 
+    # Show parameters based on structure type
+    if leg_type == LegType.PIER:
+        # Pier type inputs
+        column_diameter = st.sidebar.number_input(
+            "Column Diameter (m)",
+            min_value=0.1,
+            max_value=10.0,
+            value=DEFAULT_COLUMN_DIAMETER,
+            step=0.1,
+            help=f"Default: {DEFAULT_COLUMN_DIAMETER}m",
+        )
+        inputs["column_diameter"] = str(column_diameter)
+        # Create PierConfig with proper type annotation
+        pier_config: PierConfig = {"diameter": Decimal(str(column_diameter))}
+        leg_config = pier_config
+    else:
+        # Bored pile type inputs
+        wetted_area = st.sidebar.number_input(
+            "Wetted Area (m²)",
+            min_value=0.1,
+            max_value=100.0,
+            value=20.0,
+            step=0.1,
+            help="Cross-sectional area exposed to water flow",
+        )
+        inputs["wetted_area"] = str(wetted_area)
+        # Create BoredPileConfig with proper type annotation
+        bored_config: BoredPileConfig = {"area": Decimal(str(wetted_area))}
+        leg_config = bored_config
+
+    # Use CD value based on leg type
     cd = st.sidebar.number_input(
-        "Water Drag Coefficient on Pier (Cd)",
+        "Above Ground Water Drag Coefficient (Cd)",
         min_value=0.1,
         max_value=2.0,
-        value=DEFAULT_CD,
+        value=CD_VALUES[leg_type],
         step=0.1,
-        help=f"Default: {DEFAULT_CD} (semi-circular)",
+        help=f"Default: {CD_VALUES[leg_type]} for {LEG_TYPE_NAMES[leg_type]} above ground",
     )
     inputs["cd"] = str(cd)
 
-    # Using the same column diameter for pile by default
+    # Set default pile diameter based on leg type
+    default_pile_diameter = (
+        DEFAULT_COLUMN_DIAMETER if leg_type == LegType.PIER else DEFAULT_PILE_DIAMETER
+    )
     pile_diameter = st.sidebar.number_input(
-        "Pile Diameter (m)",
+        "Below Ground Pile Diameter (m)",
         min_value=0.0,
         max_value=10.0,
-        value=DEFAULT_PILE_DIAMETER,  # Default same as column
+        value=default_pile_diameter,
         step=0.1,
-        help="Diameter of the pile (defaults to column diameter)",
+        help="Diameter of the pile below ground (required for below-ground forces)",
     )
     inputs["pile_diameter"] = str(pile_diameter)
 
     cd_pile = st.sidebar.number_input(
-        "Water Drag Coefficient on Pile (Cd)",
+        "Below Ground Water Drag Coefficient (Cd)",
         min_value=0.0,
         max_value=2.0,
-        value=DEFAULT_CD_PILE,  # Default same as column
+        value=CD_PILE_VALUES[leg_type],
         step=0.1,
-        help="Drag coefficient for pile (defaults to column Cd)",
+        help=f"Default: {CD_PILE_VALUES[leg_type]} for {LEG_TYPE_NAMES[leg_type]} below ground",
     )
     inputs["cd_pile"] = str(cd_pile)
 
@@ -201,26 +239,21 @@ def main():
     )
 
     preview_scour_depth = Decimal(str(inputs["scour_depth"]))
-
-    # Setup pile diameter - use column diameter if no pile diameter specified
-    actual_pile_diameter = (
-        Decimal(str(inputs["pile_diameter"]))
-        if float(inputs["pile_diameter"]) > 0
-        else Decimal(str(inputs["column_diameter"]))
-    )
+    decimal_pile_diameter = Decimal(str(inputs["pile_diameter"]))
 
     forces = calculate_forces(
-        Decimal(str(inputs["column_diameter"])),
-        decimal_preview_depth,
-        decimal_preview_velocity,
-        actual_debris_depth,  # Already a Decimal
-        Decimal(str(inputs["cd"])),
-        Decimal(str(inputs["log_mass"])),
-        Decimal(str(inputs["stopping_distance"])),
-        Decimal(str(inputs["load_factor"])),
-        actual_pile_diameter,
-        Decimal(str(inputs["cd_pile"])),
-        preview_scour_depth,
+        leg_type=leg_type,
+        leg_config=leg_config,
+        water_depth=decimal_preview_depth,
+        water_velocity=decimal_preview_velocity,
+        debris_mat_depth=actual_debris_depth,  # Already a Decimal
+        cd_pier=Decimal(str(inputs["cd"])),
+        log_mass=Decimal(str(inputs["log_mass"])),
+        stopping_distance=Decimal(str(inputs["stopping_distance"])),
+        load_factor=Decimal(str(inputs["load_factor"])),
+        pile_diameter=decimal_pile_diameter,
+        cd_pile=Decimal(str(inputs["cd_pile"])),
+        scour_depth=preview_scour_depth,
     )
 
     col1, col2 = st.columns(2)
@@ -241,14 +274,29 @@ def main():
         st.write(f"**Ld2:** {float(forces['Ld2']):.1f} m")
 
     st.subheader("Load Combinations")
-    st.write("**F1 (Water Flow) + F2 (Debris)**")
-    st.write("**F1 (Water Flow) + F3 (Log Impact)**")
+    st.write("All combinations include Fd2 (Water Flow on Pile below ground)")
+    st.write("**Combination 1: F1 (Water Flow) + F2 (Debris) + Fd2**")
+    st.write("**Combination 2: F1 (Water Flow) + F3 (Log Impact) + Fd2**")
+    st.write("*(Note: F2 and F3 do not occur simultaneously)*")
 
-    # Draw and display the diagram
+    # Show structure type illustration
+    st.subheader("Structure Configuration")
+    if leg_type == LegType.PIER:
+        st.image("pier-type.png", caption="Pier Type Configuration")
+    else:
+        st.image("bored-pile.png", caption="Bored Pile Configuration")
+
+    # Draw and display the forces diagram
     st.subheader("Force Diagram")
+    # Get column diameter for diagram - for PIER use diameter, for BORED_PILE use pile diameter
+    vis_column_diameter = (
+        float(inputs["column_diameter"])
+        if leg_type == LegType.PIER
+        else float(inputs["pile_diameter"])
+    )
     fig = draw_column_diagram(
         water_depth=decimal_preview_depth,  # Use Decimal value directly
-        column_diameter=float(inputs["column_diameter"]),
+        column_diameter=vis_column_diameter,
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
         F1=forces["F1"],
         F2=forces["F2"],
@@ -335,15 +383,20 @@ def main():
         )
 
         # Create parameters dataframe with exact values
+        type_specific_params = (
+            {"Column Diameter (m)": inputs["column_diameter"]}
+            if leg_type == LegType.PIER
+            else {"Wetted Area (m²)": inputs["wetted_area"]}
+        )
+
         params_df = pd.DataFrame(
             {
                 "Parameter": [
                     "Selected Event",
-                    "Column Diameter (m)",
-                    "Min Debris Mat Depth (m)",
-                    "Max Debris Mat Depth (m)",
-                    "Debris Span (m)",
+                    "Structure Type",
+                    *type_specific_params.keys(),
                     "Water Drag Coefficient (Cd)",
+                    "Debris Span (m)",
                     "Log Mass (kg)",
                     "Stopping Distance (m)",
                     "Load Factor",
@@ -353,11 +406,10 @@ def main():
                 ],
                 "Value": [
                     inputs["selected_event"],
-                    str(Decimal(str(inputs["column_diameter"]))),
-                    str(Decimal(str(inputs["min_debris_depth"]))),
-                    str(Decimal(str(inputs["max_debris_depth"]))),
-                    "20.0",  # Debris span is hard-coded
+                    LEG_TYPE_NAMES[leg_type],
+                    *type_specific_params.values(),
                     str(Decimal(str(inputs["cd"]))),
+                    "20.0",  # Debris span is hard-coded
                     str(Decimal(str(inputs["log_mass"]))),
                     str(Decimal(str(inputs["stopping_distance"]))),
                     str(Decimal(str(inputs["load_factor"]))),
