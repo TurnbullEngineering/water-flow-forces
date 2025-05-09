@@ -149,7 +149,10 @@ def calculate_forces(
         # Bored pile type: use explicit area and 2/3 water depth
         if not isinstance(leg_config, dict) or "area" not in leg_config:
             raise TypeError("Bored pile type requires BoredPileConfig with area")
-        Ad = leg_config["area"]
+        # area is just the area of a single face of the triangular leg of transmission tower
+        # critical case is 45 degrees, and there are two faces
+        # so the wetted area normal to the flow is area * sqrt(2)
+        Ad = leg_config["area"] * Decimal("2").sqrt()
         F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
         L1 = (Decimal("2") * water_depth) / Decimal("3")  # 2/3 height for bored pile
 
