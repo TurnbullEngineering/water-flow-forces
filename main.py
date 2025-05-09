@@ -185,7 +185,6 @@ def calculate_forces(
     Ad2 = scour_depth * pile_diameter  # Forces only apply to scoured area
     # Fd2 - Water Flow Force on pile
     Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
-    print(f"Scour depth: {scour_depth}, pile diameter: {pile_diameter}")
     Ld2 = -scour_depth / Decimal("2")  # Force acts at midpoint of scoured area
 
     return {
@@ -409,20 +408,6 @@ def draw_column_diagram(
             horizontalalignment="center",
         )
 
-        # Scour/pile depth indicator
-        ax.annotate(
-            "",
-            xy=(column_x - pile_diameter / 2 - 3, ground_level - actual_scour),
-            xytext=(column_x - pile_diameter / 2 - 3, ground_level),
-            arrowprops=dict(arrowstyle="<->"),
-        )
-        ax.text(
-            column_x - pile_diameter / 2 - 3.5,
-            ground_level - actual_scour / 2,
-            f"Pile\nDepth\n{actual_scour:.1f} m",
-            verticalalignment="center",
-        )
-
     # Set limits and labels with adjusted ylim for pile
     ax.set_xlim(0, 10)
     min_y = min(ground_level - 1.5, ground_level - pile_depth - 0.5)
@@ -479,9 +464,6 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             or is_invalid_value(water_velocity)
             or is_invalid_value(scour_depth)
         ):
-            print(type(water_depth), type(water_velocity))
-            print(water_depth, water_velocity)
-            print("Invalid values detected, skipping row.")
             results.append(
                 {
                     "F1": "N/A",
@@ -590,6 +572,37 @@ def main():
     )
     inputs["column_diameter"] = str(column_diameter)
 
+    cd = st.sidebar.number_input(
+        "Water Drag Coefficient on Pier (Cd)",
+        min_value=0.1,
+        max_value=2.0,
+        value=0.7,
+        step=0.1,
+        help="Default: 0.7 (semi-circular)",
+    )
+    inputs["cd"] = str(cd)
+
+    # Using the same column diameter for pile by default
+    pile_diameter = st.sidebar.number_input(
+        "Pile Diameter (m)",
+        min_value=0.0,
+        max_value=10.0,
+        value=2.5,  # Default same as column
+        step=0.1,
+        help="Diameter of the pile (defaults to column diameter)",
+    )
+    inputs["pile_diameter"] = str(pile_diameter)
+
+    cd_pile = st.sidebar.number_input(
+        "Water Drag Coefficient on Pile (Cd)",
+        min_value=0.0,
+        max_value=2.0,
+        value=0.7,  # Default same as column
+        step=0.1,
+        help="Drag coefficient for pile (defaults to column Cd)",
+    )
+    inputs["cd_pile"] = str(cd_pile)
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Preview Parameters")
     st.sidebar.markdown("*(Will be overridden by Excel data)*")
@@ -613,43 +626,15 @@ def main():
         help=f"Will be replaced by '{selected_event} Event Peak Velocity' from Excel",
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("#### Pile Parameters")
-
-    # Using the same column diameter for pile by default
-    pile_diameter = st.sidebar.number_input(
-        "Pile Diameter (m)",
-        min_value=0.0,
-        max_value=10.0,
-        value=2.5,  # Default same as column
-        step=0.1,
-        help="Diameter of the pile (defaults to column diameter)",
-    )
-    inputs["pile_diameter"] = str(pile_diameter)
-
-    cd_pile = st.sidebar.number_input(
-        "Pile Drag Coefficient (Cd)",
-        min_value=0.0,
-        max_value=2.0,
-        value=0.7,  # Default same as column
-        step=0.1,
-        help="Drag coefficient for pile (defaults to column Cd)",
-    )
-    inputs["cd_pile"] = str(cd_pile)
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("#### Diagram Visualization Parameters")
-    st.sidebar.markdown("*These parameters only affect the diagram visualization*")
-
-    viz_scour_depth = st.sidebar.number_input(
+    preview_scour_depth = st.sidebar.number_input(
         "Visualization Scour Depth (m)",
         min_value=0.0,
         max_value=20.0,
-        value=5.0,  # Default 5.0m for diagram
+        value=1.0,
         step=0.1,
         help="Depth below ground level shown in diagram (does not affect calculations)",
     )
-    inputs["scour_depth"] = str(viz_scour_depth)  # Only used for diagram
+    inputs["scour_depth"] = str(preview_scour_depth)  # Only used for diagram
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
@@ -673,16 +658,6 @@ def main():
         help="Maximum depth of debris mat",
     )
     inputs["max_debris_depth"] = str(max_debris_depth)
-
-    cd = st.sidebar.number_input(
-        "Water Drag Coefficient on Column (Cd)",
-        min_value=0.1,
-        max_value=2.0,
-        value=0.7,
-        step=0.1,
-        help="Default: 0.7 (semi-circular)",
-    )
-    inputs["cd"] = str(cd)
 
     log_mass = st.sidebar.number_input(
         "Log Mass (kg)",
