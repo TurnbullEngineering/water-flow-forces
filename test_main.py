@@ -1,6 +1,8 @@
+"""Unit tests for the Water Flow Forces Calculator."""
+
 import pytest
 from decimal import Decimal
-from main import calculate_forces
+from src.calculations import calculate_forces
 
 
 def test_calculate_forces_normal_case():
