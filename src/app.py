@@ -9,9 +9,7 @@ import pandas as pd
 from .constants import (
     EVENTS,
     DEFAULT_COLUMN_DIAMETER,
-    DEFAULT_CD,
     DEFAULT_PILE_DIAMETER,
-    DEFAULT_CD_PILE,
     DEFAULT_WATER_DEPTH,
     DEFAULT_WATER_VELOCITY,
     DEFAULT_SCOUR_DEPTH,

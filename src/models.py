@@ -2,7 +2,6 @@
 
 from typing import TypedDict, Union
 from decimal import Decimal
-from .constants import LegType
 
 
 class ForceResults(TypedDict):
