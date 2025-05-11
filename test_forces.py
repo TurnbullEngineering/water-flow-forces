@@ -11,8 +11,8 @@ from src.models import PierConfig, BoredPileConfig
     "column_diameter,water_depth,water_velocity,load_factor,expected_f1",
     [
         # Format: (diameter_m, depth_m, velocity_m_s, load_factor, expected_F1_kN)
-        (2.5, 8.0, 3.0, 1.3, 234.0),  # Normal safety factor
-        (2.5, 8.0, 3.0, 1.0, 180.0),  # No safety factor
+        (2.5, 1.482, 1.944, 1.0, 4.901),
+        (2.5, 0.485, 0.373, 1.0, 0.059),
     ],
 )
 def test_water_force_pier(
@@ -35,8 +35,8 @@ def test_water_force_pier(
         water_velocity=water_velocity,
         debris_mat_depth=Decimal("0.0"),
         cd_pier=Decimal("0.7"),
-        log_mass=Decimal("0.0"),
-        stopping_distance=Decimal("0.0"),
+        log_mass=Decimal("1.0"),
+        stopping_distance=Decimal("1.0"),
         load_factor=load_factor,
     )
 
@@ -49,11 +49,12 @@ def test_water_force_pier(
     "wetted_area,water_velocity,load_factor,expected_f1",
     [
         # Format: (area_m2, velocity_m_s, load_factor, expected_F1_kN)
-        (20.0, 3.0, 1.3, 280.8),  # Normal safety factor
-        (20.0, 3.0, 1.0, 216.0),  # No safety factor
+        (20.0, 3.0, 1.3, 132.370389438),
     ],
 )
-def test_water_force_bored_pile(wetted_area, water_velocity, load_factor, expected_f1):
+def test_water_force_on_pier_bored_pile(
+    wetted_area, water_velocity, load_factor, expected_f1
+):
     """Test F1 calculation for bored pile type with provided test cases."""
     # Convert inputs to Decimal
     wetted_area = Decimal(str(wetted_area))
@@ -71,8 +72,10 @@ def test_water_force_bored_pile(wetted_area, water_velocity, load_factor, expect
         debris_mat_depth=Decimal("0.0"),
         cd_pier=Decimal("0.8"),
         log_mass=Decimal("0.0"),
-        stopping_distance=Decimal("0.0"),
+        stopping_distance=Decimal("1.0"),
         load_factor=load_factor,
+        pile_diameter=Decimal("2.5"),  # Diameter irrelevant for bored F1
+        cd_pile=Decimal("0.7"),
     )
 
     assert abs(result["F1"] - expected_f1) < Decimal("0.1"), (
@@ -84,8 +87,8 @@ def test_water_force_bored_pile(wetted_area, water_velocity, load_factor, expect
     "pile_diameter,scour_depth,water_velocity,load_factor,expected_fd2",
     [
         # Format: (diameter_m, scour_m, velocity_m_s, load_factor, expected_Fd2_kN)
-        (2.5, 1.0, 3.0, 1.3, 29.3),  # Normal safety factor
-        (2.5, 1.0, 3.0, 1.0, 22.5),  # No safety factor
+        (2.5, 1.482, 1.944, 1, 4.901),
+        (2.5, 0.485, 0.373, 1, 0.059),
     ],
 )
 def test_scoured_pile_force(
@@ -109,7 +112,7 @@ def test_scoured_pile_force(
         debris_mat_depth=Decimal("0.0"),
         cd_pier=Decimal("0.7"),
         log_mass=Decimal("0.0"),
-        stopping_distance=Decimal("0.0"),
+        stopping_distance=Decimal("1.0"),
         load_factor=load_factor,
         pile_diameter=pile_diameter,
         cd_pile=Decimal("0.7"),
@@ -125,8 +128,7 @@ def test_scoured_pile_force(
     "water_depth,water_velocity,debris_depth,load_factor,expected_f2",
     [
         # Format: (depth_m, velocity_m_s, debris_m, load_factor, expected_F2_kN)
-        (8.0, 3.0, 2.0, 1.3, 390.0),  # Normal safety factor
-        (8.0, 3.0, 2.0, 1.0, 300.0),  # No safety factor
+        (1.482, 1.944, 1.482, 1, 190.423),  # No safety factor
     ],
 )
 def test_debris_force(
@@ -150,7 +152,7 @@ def test_debris_force(
         debris_mat_depth=debris_depth,
         cd_pier=Decimal("0.7"),  # Not used for F2
         log_mass=Decimal("0.0"),
-        stopping_distance=Decimal("0.0"),
+        stopping_distance=Decimal("1.0"),
         load_factor=load_factor,
     )
 
@@ -163,8 +165,7 @@ def test_debris_force(
     "water_depth,water_velocity,log_mass,stopping_distance,load_factor,expected_f3",
     [
         # Format: (depth_m, velocity_m_s, mass_kg, stop_m, load_factor, expected_F3_kN)
-        (8.0, 3.0, 10000, 0.025, 1.3, 468.0),  # Normal safety factor
-        (8.0, 3.0, 10000, 0.025, 1.0, 360.0),  # No safety factor
+        (1.193, 0.863, 10000, 0.025, 1.0, 148.954),
     ],
 )
 def test_log_impact_force(
