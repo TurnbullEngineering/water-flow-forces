@@ -67,7 +67,7 @@ The embedded sheet outlines key assumptions and design input parameters used in 
 """
 
 TECHNICAL_ASSUMPTIONS: List[str] = [
-    "For pier type, wetted area is calculated as the product of water depth and column diameter.",
+    "For pier type, wetted area is calculated as the product of water depth and column diameter. Capping beam soffit is assumed to be at least 100 mm above the water level.",
     "For bored pile, wetted area is provided directly. Wetted Area is taken as the area of a single face of the triangular leg of transmission tower.",
     "Debris width is assumed to be 20 m.",
     "For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
