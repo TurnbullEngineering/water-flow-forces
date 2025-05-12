@@ -67,9 +67,8 @@ The embedded sheet outlines key assumptions and design input parameters used in 
 """
 
 TECHNICAL_ASSUMPTIONS: List[str] = [
-    "Scour protection is assumed; scour depth is excluded from force calculations.",
     "For pier type, wetted area is calculated as the product of water depth and column diameter.",
-    "For bored pile, wetted area is provided directly.",
+    "For bored pile, wetted area is provided directly. Wetted Area is taken as the area of a single face of the triangular leg of transmission tower.",
     "Debris width is assumed to be 20 m.",
     "For water depths less than the minimum debris depth, the minimum depth is adopted per AS 5100.2.",
     "Default load factor is 1.3, actual load factor used for calculations is a parameter.",
