@@ -400,7 +400,6 @@ def main():
                     "Load Factor",
                     "Pile Diameter (m)",
                     "Pile Drag Coefficient (Cd)",
-                    "Scour Depth (m)",
                 ],
                 "Value": [
                     inputs["selected_event"],
@@ -413,7 +412,6 @@ def main():
                     str(Decimal(str(inputs["load_factor"]))),
                     str(Decimal(str(inputs["pile_diameter"]))),
                     str(Decimal(str(inputs["cd_pile"]))),
-                    str(Decimal(str(inputs["scour_depth"]))),
                 ],
             }
         )
