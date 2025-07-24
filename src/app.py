@@ -168,7 +168,31 @@ def main():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
+    
+    # Add AS5100 locking checkbox
+    use_as5100 = st.sidebar.checkbox(
+        "Use AS5100 defaults",
+        value=True,
+        help="Lock parameters to AS5100:2017 standards"
+    )
+    
+    # Add checkboxes for enabling min and max debris depth
+    enable_min_debris = st.sidebar.checkbox(
+        "Enable Min Debris Depth",
+        value=True,
+        disabled=use_as5100,
+        help="Allow setting a minimum debris depth limit"
+    )
+    
+    enable_max_debris = st.sidebar.checkbox(
+        "Enable Max Debris Depth",
+        value=True,
+        disabled=use_as5100,
+        help="Allow setting a maximum debris depth limit"
+    )
 
+    # Min Debris Depth with AS5100 lock and enable checkbox
+    min_debris_disabled = use_as5100 or not enable_min_debris
     min_debris_depth = st.sidebar.number_input(
         "Min Debris Mat Depth (m)",
         min_value=0.1,
@@ -176,9 +200,17 @@ def main():
         value=DEFAULT_MIN_DEBRIS_DEPTH,
         step=0.1,
         help="Minimum depth of debris mat",
+        disabled=min_debris_disabled,
     )
     inputs["min_debris_depth"] = str(min_debris_depth)
+    
+    # Adjust min debris depth if disabled
+    if not enable_min_debris:
+        min_debris_depth = 0.0
+        inputs["min_debris_depth"] = "0.0"
 
+    # Max Debris Depth with AS5100 lock and enable checkbox
+    max_debris_disabled = use_as5100 or not enable_max_debris
     max_debris_depth = st.sidebar.number_input(
         "Max Debris Mat Depth (m)",
         min_value=min_debris_depth,
@@ -186,9 +218,16 @@ def main():
         value=DEFAULT_MAX_DEBRIS_DEPTH,
         step=0.1,
         help="Maximum depth of debris mat",
+        disabled=max_debris_disabled,
     )
     inputs["max_debris_depth"] = str(max_debris_depth)
+    
+    # Adjust max debris depth if disabled
+    if not enable_max_debris:
+        max_debris_depth = 1000_000.0
+        inputs["max_debris_depth"] = "1000_000.0"
 
+    # Log Mass (kg) - disabled when AS5100 is enabled
     log_mass = st.sidebar.number_input(
         "Log Mass (kg)",
         min_value=100,
@@ -196,9 +235,11 @@ def main():
         value=DEFAULT_LOG_MASS,
         step=100,
         help=f"Default: {DEFAULT_LOG_MASS}kg ({int(DEFAULT_LOG_MASS / 1000)} tons)",
+        disabled=use_as5100,
     )
     inputs["log_mass"] = str(log_mass)
 
+    # Stopping Distance with AS5100 lock
     stopping_distance = st.sidebar.number_input(
         "Stopping Distance (m)",
         min_value=0.001,
@@ -207,9 +248,11 @@ def main():
         step=0.001,
         format="%.3f",
         help=f"Default: {DEFAULT_STOPPING_DISTANCE}m ({int(DEFAULT_STOPPING_DISTANCE * 1000)}mm)",
+        disabled=use_as5100,
     )
     inputs["stopping_distance"] = str(stopping_distance)
 
+    # Load Factor
     load_factor = st.sidebar.number_input(
         "Load Factor",
         min_value=0.1,
@@ -230,10 +273,11 @@ def main():
     decimal_preview_depth = Decimal(str(preview_depth))
     decimal_preview_velocity = Decimal(str(preview_velocity))
 
+    # Use adjusted values based on checkbox states
     actual_debris_depth = calculate_actual_debris_depth(
         decimal_preview_depth,
-        Decimal(str(inputs["min_debris_depth"])),
-        Decimal(str(inputs["max_debris_depth"])),
+        Decimal(str(min_debris_depth)),
+        Decimal(str(max_debris_depth)),
     )
 
     preview_scour_depth = Decimal(str(inputs["scour_depth"]))
