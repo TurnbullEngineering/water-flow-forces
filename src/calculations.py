@@ -84,12 +84,13 @@ def calculate_forces(
     leg_type: LegType,
     leg_config: LegConfig,
     water_depth: Decimal,
-    water_velocity: Decimal,
+    average_water_velocity: Decimal,
     debris_mat_depth: Decimal,
     cd_pier: Decimal,
     log_mass: Decimal,
     stopping_distance: Decimal,
     load_factor: Decimal,
+    water_surface_velocity_factor: Decimal,
     pile_diameter: Decimal = Decimal("0"),
     cd_pile: Decimal = Decimal("0"),
     scour_depth: Decimal = Decimal("0"),
@@ -105,8 +106,8 @@ def calculate_forces(
         Configuration for the leg type (PierConfig or BoredPileConfig)
     water_depth : Decimal
         Depth of water (m)
-    water_velocity : Decimal
-        Velocity of water flow (m/s)
+    average_water_velocity : Decimal
+        Average velocity of water flow (m/s)
     debris_mat_depth : Decimal
         Depth of debris mat (m)
     cd_pier : Decimal
@@ -117,6 +118,8 @@ def calculate_forces(
         Distance over which log stops (m)
     load_factor : Decimal
         Safety factor applied to forces
+    water_surface_velocity_factor : Decimal
+        Factor to convert average velocity to surface velocity
     pile_diameter : Decimal, optional
         Diameter of pile (m), defaults to column_diameter if 0
     cd_pile : Decimal, optional
@@ -143,7 +146,7 @@ def calculate_forces(
             raise TypeError("Pier type requires PierConfig with diameter")
         column_diameter = leg_config["diameter"]
         Ad = water_depth * column_diameter
-        F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
+        F1 = Decimal("0.5") * cd_pier * (average_water_velocity**2) * Ad * load_factor
         L1 = water_depth / Decimal("2")  # Mid-height for pier type
     else:
         # Bored pile type: use explicit area and 2/3 water depth
@@ -153,20 +156,23 @@ def calculate_forces(
         # critical case is 45 degrees, and there are two faces
         # so the wetted area normal to the flow is area * sqrt(2)
         Ad = leg_config["area"] * Decimal("2").sqrt()
-        F1 = Decimal("0.5") * cd_pier * (water_velocity**2) * Ad * load_factor
+        F1 = Decimal("0.5") * cd_pier * (average_water_velocity**2) * Ad * load_factor
         L1 = (Decimal("2") * water_depth) / Decimal("3")  # 2/3 height for bored pile
+
+    # Calculate surface velocity
+    surface_velocity = average_water_velocity * water_surface_velocity_factor
 
     # Calculate debris forces (same for both types)
     debris_span = Decimal(str(DEBRIS_SPAN))  # m
     Adeb = debris_mat_depth * debris_span
-    C_debris = Cd(water_velocity, water_depth)
-    F2 = Decimal("0.5") * C_debris * (water_velocity**2) * Adeb * load_factor
+    C_debris = Cd(surface_velocity, water_depth)
+    F2 = Decimal("0.5") * C_debris * (surface_velocity**2) * Adeb * load_factor
     L2 = max(
         water_depth - (debris_mat_depth / Decimal("2")), debris_mat_depth / Decimal("2")
     )
 
     # Calculate log impact force
-    acceleration = (water_velocity**2) / (Decimal("2") * stopping_distance)
+    acceleration = (surface_velocity**2) / (Decimal("2") * stopping_distance)
     F3 = log_mass * acceleration * load_factor / Decimal("1000")  # Convert to kN
     L3 = water_depth
 
@@ -186,7 +192,7 @@ def calculate_forces(
 
     Ad2 = scour_depth * pile_diameter  # Forces only apply to scoured area
     # Fd2 - Water Flow Force on pile
-    Fd2 = Decimal("0.5") * cd_pile * (water_velocity**2) * Ad2 * load_factor
+    Fd2 = Decimal("0.5") * cd_pile * (average_water_velocity**2) * Ad2 * load_factor
     Ld2 = -scour_depth / Decimal("2")  # Force acts at midpoint of scoured area
 
     return {

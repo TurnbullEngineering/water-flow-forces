@@ -83,6 +83,11 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
         bored_config: BoredPileConfig = {"area": Decimal(str(inputs["wetted_area"]))}
         leg_config = bored_config
 
+    # Extract the water surface velocity factor
+    water_surface_velocity_factor = Decimal(
+        str(inputs["water_surface_velocity_factor"])
+    )
+
     for idx, row in df.iterrows():
         water_depth = row[DEPTH_COL]
         water_velocity = row[VELOCITY_COL]
@@ -125,12 +130,13 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             leg_type=leg_type,
             leg_config=leg_config,
             water_depth=decimal_water_depth,
-            water_velocity=decimal_water_velocity,
+            average_water_velocity=decimal_water_velocity,
             debris_mat_depth=actual_debris_depth,  # Already a Decimal
             cd_pier=Decimal(str(inputs["cd"])),
             log_mass=Decimal(str(inputs["log_mass"])),
             stopping_distance=Decimal(str(inputs["stopping_distance"])),
             load_factor=Decimal(str(inputs["load_factor"])),
+            water_surface_velocity_factor=water_surface_velocity_factor,
             pile_diameter=pile_diameter,
             cd_pile=Decimal(str(inputs["cd_pile"])),
             scour_depth=decimal_scour_depth,  # Use scour depth from Excel data

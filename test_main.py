@@ -13,7 +13,7 @@ def test_calculate_forces_pier_type():
     leg_type = LegType.PIER
     leg_config: PierConfig = {"diameter": Decimal("2.5")}  # meters
     water_depth = Decimal("8.0")  # meters
-    water_velocity = Decimal("3.0")  # m/s
+    average_water_velocity = Decimal("3.0")  # m/s
     debris_mat_depth = Decimal("2.0")  # meters
     cd = Decimal("0.7")  # drag coefficient
     log_mass = Decimal("10000")  # kg
@@ -25,17 +25,23 @@ def test_calculate_forces_pier_type():
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=water_depth,
-        water_velocity=water_velocity,
+        average_water_velocity=average_water_velocity,
         debris_mat_depth=debris_mat_depth,
         cd_pier=cd,
         log_mass=log_mass,
         stopping_distance=stopping_distance,
         load_factor=load_factor,
+        water_surface_velocity_factor=Decimal("1.4"),
     )
 
-    assert {"F1", "F2", "F3", "L1", "L2", "L3"} <= result.keys(), (
-        "Result should contain keys: F1, F2, F3, L1, L2, L3"
-    )
+    assert {
+        "F1",
+        "F2",
+        "F3",
+        "L1",
+        "L2",
+        "L3",
+    } <= result.keys(), "Result should contain keys: F1, F2, F3, L1, L2, L3"
     # Test that forces are positive
     assert result["F1"] > 0
     assert result["F2"] > 0
@@ -52,7 +58,7 @@ def test_calculate_forces_bored_pile_type():
     leg_type = LegType.BORED_PILE
     leg_config: BoredPileConfig = {"area": Decimal("20.0")}  # m²
     water_depth = Decimal("8.0")  # meters
-    water_velocity = Decimal("3.0")  # m/s
+    average_water_velocity = Decimal("3.0")  # m/s
     debris_mat_depth = Decimal("2.0")  # meters
     cd = Decimal("1.2")  # drag coefficient for circular pile
     log_mass = Decimal("10000")  # kg
@@ -65,12 +71,13 @@ def test_calculate_forces_bored_pile_type():
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=water_depth,
-        water_velocity=water_velocity,
+        average_water_velocity=average_water_velocity,
         debris_mat_depth=debris_mat_depth,
         cd_pier=cd,
         log_mass=log_mass,
         stopping_distance=stopping_distance,
         load_factor=load_factor,
+        water_surface_velocity_factor=Decimal("1.4"),
         pile_diameter=pile_diameter,
     )
 
@@ -91,7 +98,7 @@ def test_calculate_forces_zero_velocity():
     leg_type = LegType.PIER
     leg_config: PierConfig = {"diameter": Decimal("2.5")}
     water_depth = Decimal("8.0")
-    water_velocity = Decimal("0.0")  # zero velocity
+    average_water_velocity = Decimal("0.0")  # zero velocity
     debris_mat_depth = Decimal("2.0")
     cd = Decimal("0.7")
     log_mass = Decimal("10000")
@@ -103,12 +110,13 @@ def test_calculate_forces_zero_velocity():
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=water_depth,
-        water_velocity=water_velocity,
+        average_water_velocity=average_water_velocity,
         debris_mat_depth=debris_mat_depth,
         cd_pier=cd,
         log_mass=log_mass,
         stopping_distance=stopping_distance,
         load_factor=load_factor,
+        water_surface_velocity_factor=Decimal("1.4"),
     )
 
     # Assert
@@ -127,7 +135,7 @@ def test_calculate_forces_debris_depth_exceeding_water():
     leg_type = LegType.PIER
     leg_config: PierConfig = {"diameter": Decimal("2.5")}
     water_depth = Decimal("2.0")  # shallow water
-    water_velocity = Decimal("3.0")
+    average_water_velocity = Decimal("3.0")
     debris_mat_depth = Decimal("4.0")  # exceeds water depth
     cd = Decimal("0.7")
     log_mass = Decimal("10000")
@@ -139,37 +147,39 @@ def test_calculate_forces_debris_depth_exceeding_water():
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=water_depth,
-        water_velocity=water_velocity,
+        average_water_velocity=average_water_velocity,
         debris_mat_depth=debris_mat_depth,
         cd_pier=cd,
         log_mass=log_mass,
         stopping_distance=stopping_distance,
         load_factor=load_factor,
+        water_surface_velocity_factor=Decimal("1.4"),
     )
 
     # Assert
     # Test that L2 is at half the debris depth
-    assert result["L2"] == debris_mat_depth / 2, (
-        "L2 should be at half the debris mat depth when it exceeds water depth."
-    )
+    assert (
+        result["L2"] == debris_mat_depth / 2
+    ), "L2 should be at half the debris mat depth when it exceeds water depth."
 
     # Calculate forces with same parameters but water depth is half of original
     result_with_half_water_depth = calculate_forces(
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=water_depth / Decimal("2"),
-        water_velocity=water_velocity,
+        average_water_velocity=average_water_velocity,
         debris_mat_depth=debris_mat_depth,
         cd_pier=cd,
         log_mass=log_mass,
         stopping_distance=stopping_distance,
         load_factor=load_factor,
+        water_surface_velocity_factor=Decimal("1.4"),
     )
 
     # F2 should be the same in both cases since it's limited by water depth
-    assert result["F2"] == result_with_half_water_depth["F2"], (
-        "F2 should not change with water depth if debris mat depth exceeds water depth."
-    )
+    assert (
+        result["F2"] == result_with_half_water_depth["F2"]
+    ), "F2 should not change with water depth if debris mat depth exceeds water depth."
 
 
 def test_calculate_forces_validates_inputs():
@@ -179,12 +189,13 @@ def test_calculate_forces_validates_inputs():
         "leg_type": LegType.PIER,
         "leg_config": {"diameter": Decimal("2.5")},
         "water_depth": Decimal("8.0"),
-        "water_velocity": Decimal("3.0"),
+        "average_water_velocity": Decimal("3.0"),
         "debris_mat_depth": Decimal("2.0"),
         "cd_pier": Decimal("0.7"),
         "log_mass": Decimal("10000"),
         "stopping_distance": Decimal("0.025"),
         "load_factor": Decimal("1.3"),
+        "water_surface_velocity_factor": Decimal("1.4"),
     }
 
     # Test each parameter with wrong type (except leg_type since it's an enum)
@@ -206,7 +217,7 @@ def test_bored_pile_requires_pile_diameter():
     leg_type = LegType.BORED_PILE
     leg_config: BoredPileConfig = {"area": Decimal("20.0")}
     water_depth = Decimal("8.0")
-    water_velocity = Decimal("3.0")
+    average_water_velocity = Decimal("3.0")
     debris_mat_depth = Decimal("2.0")
     cd = Decimal("1.2")
     log_mass = Decimal("10000")
@@ -219,11 +230,12 @@ def test_bored_pile_requires_pile_diameter():
             leg_type=leg_type,
             leg_config=leg_config,
             water_depth=water_depth,
-            water_velocity=water_velocity,
+            average_water_velocity=average_water_velocity,
             debris_mat_depth=debris_mat_depth,
             cd_pier=cd,
             log_mass=log_mass,
             stopping_distance=stopping_distance,
             load_factor=load_factor,
+            water_surface_velocity_factor=Decimal("1.4"),
             # pile_diameter not provided
         )

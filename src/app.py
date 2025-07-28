@@ -18,6 +18,7 @@ from .constants import (
     DEFAULT_LOG_MASS,
     DEFAULT_STOPPING_DISTANCE,
     DEFAULT_LOAD_FACTOR,
+    DEFAULT_SURFACE_VELOCITY_FACTOR,
     CALCULATOR_DESCRIPTION,
     ENGINEERING_ASSUMPTIONS,
     LEGAL_TERMS,
@@ -148,7 +149,7 @@ def main():
     )
 
     preview_velocity = st.sidebar.number_input(
-        "Water Velocity (m/s)",
+        "Average Water Velocity (m/s)",
         min_value=0.1,
         max_value=10.0,
         value=DEFAULT_WATER_VELOCITY,
@@ -168,27 +169,27 @@ def main():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### Additional Parameters")
-    
+
     # Add AS5100 locking checkbox
     use_as5100 = st.sidebar.checkbox(
         "Use AS5100 defaults",
         value=True,
-        help="Lock parameters to AS5100:2017 standards"
+        help="Lock parameters to AS5100:2017 standards",
     )
-    
+
     # Add checkboxes for enabling min and max debris depth
     enable_min_debris = st.sidebar.checkbox(
         "Enable Min Debris Depth",
         value=True,
         disabled=use_as5100,
-        help="Allow setting a minimum debris depth limit"
+        help="Allow setting a minimum debris depth limit",
     )
-    
+
     enable_max_debris = st.sidebar.checkbox(
         "Enable Max Debris Depth",
         value=True,
         disabled=use_as5100,
-        help="Allow setting a maximum debris depth limit"
+        help="Allow setting a maximum debris depth limit",
     )
 
     # Min Debris Depth with AS5100 lock and enable checkbox
@@ -203,7 +204,7 @@ def main():
         disabled=min_debris_disabled,
     )
     inputs["min_debris_depth"] = str(min_debris_depth)
-    
+
     # Adjust min debris depth if disabled
     if not enable_min_debris:
         min_debris_depth = 0.0
@@ -221,7 +222,7 @@ def main():
         disabled=max_debris_disabled,
     )
     inputs["max_debris_depth"] = str(max_debris_depth)
-    
+
     # Adjust max debris depth if disabled
     if not enable_max_debris:
         max_debris_depth = 1000_000.0
@@ -260,8 +261,21 @@ def main():
         value=DEFAULT_LOAD_FACTOR,
         step=0.1,
         help=f"Safety factor applied to all forces (Default: {DEFAULT_LOAD_FACTOR})",
+        disabled=use_as5100,
     )
     inputs["load_factor"] = str(load_factor)
+
+    # Water Surface Velocity Factor
+    water_surface_velocity_factor = st.sidebar.number_input(
+        "Water Surface Velocity Factor",
+        min_value=0.0,
+        max_value=10.0,
+        value=DEFAULT_SURFACE_VELOCITY_FACTOR,
+        step=0.1,
+        help="Factor to convert average velocity to surface velocity for log impact (Default: 1.4)",
+        disabled=use_as5100,
+    )
+    inputs["water_surface_velocity_factor"] = str(water_surface_velocity_factor)
 
     st.header("Preview Calculation")
     st.info(
@@ -287,12 +301,15 @@ def main():
         leg_type=leg_type,
         leg_config=leg_config,
         water_depth=decimal_preview_depth,
-        water_velocity=decimal_preview_velocity,
+        average_water_velocity=decimal_preview_velocity,
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
         cd_pier=Decimal(str(inputs["cd"])),
         log_mass=Decimal(str(inputs["log_mass"])),
         stopping_distance=Decimal(str(inputs["stopping_distance"])),
         load_factor=Decimal(str(inputs["load_factor"])),
+        water_surface_velocity_factor=Decimal(
+            str(inputs["water_surface_velocity_factor"])
+        ),
         pile_diameter=decimal_pile_diameter,
         cd_pile=Decimal(str(inputs["cd_pile"])),
         scour_depth=preview_scour_depth,
@@ -370,9 +387,9 @@ def main():
         f"""
         Upload Excel files with the following required columns:
         - **{selected_event} Event Peak Flood Depth**: Will replace the preview water depth
-        - **{selected_event} Event Peak Velocity**: Will replace the preview water velocity
+        - **{selected_event} Event Peak Velocity**: Will replace the preview average water velocity
         - **{selected_event} Event Scour**: Will be used for pile force calculations
-        
+
         Other parameters will use the values from the sliders.
         All files will be processed automatically and available for download as a zip file.
         """
@@ -442,6 +459,7 @@ def main():
                     "Log Mass (kg)",
                     "Stopping Distance (m)",
                     "Load Factor",
+                    "Water Surface Velocity Factor",
                     "Pile Diameter (m)",
                     "Pile Drag Coefficient (Cd)",
                 ],
@@ -454,6 +472,7 @@ def main():
                     str(Decimal(str(inputs["log_mass"]))),
                     str(Decimal(str(inputs["stopping_distance"]))),
                     str(Decimal(str(inputs["load_factor"]))),
+                    str(Decimal(str(inputs["water_surface_velocity_factor"]))),
                     str(Decimal(str(inputs["pile_diameter"]))),
                     str(Decimal(str(inputs["cd_pile"]))),
                 ],
