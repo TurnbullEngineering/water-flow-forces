@@ -44,10 +44,15 @@ def test_calculate_forces_pier_type():
     } <= result.keys(), "Result should contain keys: F1, F2, F3, L1, L2, L3"
     # Test that forces are positive
     assert result["F1"] > 0
+    assert result["F1a"] + result["F1b"] == result["F1"]
     assert result["F2"] > 0
     assert result["F3"] > 0
     # Test that heights are within water depth
     assert Decimal("0") <= result["L1"] <= water_depth
+    assert result["L1a"] == Decimal("3.0")
+    assert result["L1b"] == Decimal("7.0")
+    assert result["F1a"] / result["F1"] == Decimal("0.75")
+    assert result["F1b"] / result["F1"] == Decimal("0.25")
     assert Decimal("0") <= result["L2"] <= water_depth
     assert Decimal("0") <= result["L3"] <= water_depth
 
@@ -84,10 +89,14 @@ def test_calculate_forces_bored_pile_type():
     assert {"F1", "F2", "F3", "L1", "L2", "L3"} <= result.keys()
     # Test that forces are positive
     assert result["F1"] > 0
+    assert result["F1a"] + result["F1b"] == result["F1"]
     assert result["F2"] > 0
     assert result["F3"] > 0
     # Test that heights are within water depth
     assert Decimal("0") <= result["L1"] <= water_depth
+    assert abs(result["F1a"] / result["F1"] - Decimal("0.5625")) < Decimal("1e-20")
+    assert result["L1a"] == Decimal("4.0")
+    assert result["L1b"] > Decimal("6.0")
     assert Decimal("0") <= result["L2"] <= water_depth
     assert Decimal("0") <= result["L3"] <= water_depth
 
@@ -121,6 +130,8 @@ def test_calculate_forces_zero_velocity():
 
     # Assert
     assert result["F1"] == 0
+    assert result["F1a"] == 0
+    assert result["F1b"] == 0
     assert result["F2"] == 0
     assert result["F3"] == 0
     # Heights should still be valid

@@ -110,18 +110,20 @@ def main():
     )
     inputs["cd"] = str(cd)
 
-    # Set default pile diameter based on leg type
-    default_pile_diameter = (
-        DEFAULT_COLUMN_DIAMETER if leg_type == LegType.PIER else DEFAULT_PILE_DIAMETER
-    )
-    pile_diameter = st.sidebar.number_input(
-        "Below Ground Pile Diameter (m)",
-        min_value=0.0,
-        max_value=10.0,
-        value=default_pile_diameter,
-        step=0.1,
-        help="Diameter of the pile below ground (required for below-ground forces)",
-    )
+    # A pier is represented as one continuous foundation member: its below-ground
+    # diameter is therefore the same as the above-ground column diameter.
+    if leg_type == LegType.PIER:
+        pile_diameter = column_diameter
+        st.sidebar.caption("Below-ground diameter follows the column diameter.")
+    else:
+        pile_diameter = st.sidebar.number_input(
+            "Pile Diameter (m)",
+            min_value=0.1,
+            max_value=10.0,
+            value=DEFAULT_PILE_DIAMETER,
+            step=0.1,
+            help="Diameter of the bored pile used for below-ground water-flow forces.",
+        )
     inputs["pile_diameter"] = str(pile_diameter)
 
     cd_pile = st.sidebar.number_input(
@@ -318,7 +320,13 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Forces")
-        st.write(f"**F1 (Water Flow on Pier):** {float(forces['F1']):.1f} kN per pier")
+        st.write(f"**F1 total (F1a + F1b):** {float(forces['F1']):.1f} kN per pier")
+        st.write(
+            f"**F1a (Clear Water Below Debris):** {float(forces['F1a']):.1f} kN per pier"
+        )
+        st.write(
+            f"**F1b (Debris-Covered Zone):** {float(forces['F1b']):.1f} kN per pier"
+        )
         st.write(f"**F2 (Debris):** {float(forces['F2']):.1f} kN")
         st.write(f"**F3 (Log Impact):** {float(forces['F3']):.1f} kN")
         st.write(
@@ -327,40 +335,46 @@ def main():
 
     with col2:
         st.subheader("Locations")
-        st.write(f"**L1:** {float(forces['L1']):.1f} m")
+        st.write(f"**L1 total:** {float(forces['L1']):.1f} m")
+        st.write(f"**L1a:** {float(forces['L1a']):.1f} m")
+        st.write(f"**L1b:** {float(forces['L1b']):.1f} m")
         st.write(f"**L2:** {float(forces['L2']):.1f} m")
         st.write(f"**L3:** {float(forces['L3']):.1f} m")
         st.write(f"**Ld2:** {float(forces['Ld2']):.1f} m")
 
     st.subheader("Load Combinations")
     st.write("All combinations include Fd2 (Water Flow on Pile below ground)")
-    st.write("**Combination 1: F1 (Water Flow) + F2 (Debris) + Fd2**")
-    st.write("**Combination 2: F1 (Water Flow) + F3 (Log Impact) + Fd2**")
-    st.write("*(Note: F2 and F3 do not occur simultaneously)*")
+    st.write("**Combination 1: F1 (Total Water Drag) + F3 (Log Impact) + Fd2**")
+    st.write("**Combination 2: F1a (Clear-Water Drag) + F2 (Debris) + Fd2**")
+    st.write("*(F1b and F2 act over the same zone and are not combined. F2 and F3 are also not simultaneous.)*")
 
     # Show structure type illustration
     st.subheader("Structure Configuration")
     if leg_type == LegType.PIER:
-        st.image("pier-type.png", caption="Pier Type Configuration")
+        st.image("vertical-flood-pile.png", caption="Pier Type Configuration")
     else:
         st.image("bored-pile.png", caption="Bored Pile Configuration")
 
     # Draw and display the forces diagram
-    st.subheader("Force Diagram")
+    st.subheader("Force Diagrams")
     # Get column diameter for diagram - for PIER use diameter, for BORED_PILE use pile diameter
     vis_column_diameter = (
         float(inputs["column_diameter"])
         if leg_type == LegType.PIER
         else float(inputs["pile_diameter"])
     )
-    fig = draw_column_diagram(
+    diagram_inputs = dict(
         water_depth=decimal_preview_depth,  # Use Decimal value directly
         column_diameter=vis_column_diameter,
         debris_mat_depth=actual_debris_depth,  # Already a Decimal
         F1=forces["F1"],
+        F1a=forces["F1a"],
+        F1b=forces["F1b"],
         F2=forces["F2"],
         F3=forces["F3"],
         L1=forces["L1"],
+        L1a=forces["L1a"],
+        L1b=forces["L1b"],
         L2=forces["L2"],
         L3=forces["L3"],
         Fd2=forces["Fd2"],
@@ -368,7 +382,13 @@ def main():
         pile_diameter=float(inputs["pile_diameter"]),
         scour_depth=float(inputs["scour_depth"]),
     )
-    st.pyplot(fig)
+    st.markdown("##### Combination 1 — F1 + F3 + Fd2")
+    log_impact_fig = draw_column_diagram(**diagram_inputs, combination="log_impact")
+    st.pyplot(log_impact_fig)
+
+    st.markdown("##### Combination 2 — F1a + F2 + Fd2")
+    debris_fig = draw_column_diagram(**diagram_inputs, combination="debris")
+    st.pyplot(debris_fig)
 
     st.markdown("---")
     st.header("Terms and Conditions")

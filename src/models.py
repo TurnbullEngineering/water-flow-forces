@@ -10,9 +10,17 @@ class ForceResults(TypedDict):
     Attributes
     ----------
     F1 : Decimal
-        Water Flow Force on pier (kN)
+        Total water-flow force, equal to F1a + F1b (kN)
     L1 : Decimal
-        Height of F1 application (m)
+        Height of total F1 application (m)
+    F1a : Decimal
+        Water-flow force on the clear lower portion below the debris mat (kN)
+    L1a : Decimal
+        Height of F1a application (m)
+    F1b : Decimal
+        Water-flow force on the debris-covered upper portion (kN)
+    L1b : Decimal
+        Height of F1b application (m)
     F2 : Decimal
         Debris Force (kN)
     L2 : Decimal
@@ -27,8 +35,12 @@ class ForceResults(TypedDict):
         Height of Fd2 application, must be negative (m)
     """
 
-    F1: Decimal  # Water Flow Force on pier (kN)
-    L1: Decimal  # Height of F1 application (m)
+    F1: Decimal  # Total water-flow force, F1a + F1b (kN)
+    L1: Decimal  # Height of total F1 application (m)
+    F1a: Decimal  # Clear lower-portion water-flow force (kN)
+    L1a: Decimal  # Height of F1a application (m)
+    F1b: Decimal  # Debris-covered upper-portion water-flow force (kN)
+    L1b: Decimal  # Height of F1b application (m)
     F2: Decimal  # Debris Force (kN)
     L2: Decimal  # Height of F2 application (m)
     F3: Decimal  # Log Impact Force (kN)

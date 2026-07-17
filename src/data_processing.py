@@ -103,6 +103,10 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
                 {
                     "F1": "N/A",
                     "L1": "N/A",
+                    "F1a": "N/A",
+                    "L1a": "N/A",
+                    "F1b": "N/A",
+                    "L1b": "N/A",
                     "F2": "N/A",
                     "L2": "N/A",
                     "F3": "N/A",
@@ -146,6 +150,10 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
             {
                 "F1": float(forces["F1"]),
                 "L1": float(forces["L1"]),
+                "F1a": float(forces["F1a"]),
+                "L1a": float(forces["L1a"]),
+                "F1b": float(forces["F1b"]),
+                "L1b": float(forces["L1b"]),
                 "F2": float(forces["F2"]),
                 "L2": float(forces["L2"]),
                 "F3": float(forces["F3"]),

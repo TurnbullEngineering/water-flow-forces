@@ -139,14 +139,31 @@ def calculate_forces(
     TypeError
         If leg_config doesn't match leg_type
     """
+    # Split F1 at the bottom of the debris mat. F1a acts on the clear lower
+    # portion and may be combined with F2. F1b occupies the same vertical zone
+    # as the debris load and must not be combined with F2.
+    covered_depth = min(max(debris_mat_depth, Decimal("0")), water_depth)
+    clear_depth = max(water_depth - covered_depth, Decimal("0"))
+    force_factor = (
+        Decimal("0.5")
+        * cd_pier
+        * (average_water_velocity**2)
+        * load_factor
+    )
+
     # Calculate above-ground forces based on leg type
     if leg_type == LegType.PIER:
         # Pier type: use diameter and water depth for wetted area
         if not isinstance(leg_config, dict) or "diameter" not in leg_config:
             raise TypeError("Pier type requires PierConfig with diameter")
         column_diameter = leg_config["diameter"]
-        Ad = water_depth * column_diameter
-        F1 = Decimal("0.5") * cd_pier * (average_water_velocity**2) * Ad * load_factor
+        clear_area = clear_depth * column_diameter
+        covered_area = covered_depth * column_diameter
+        F1a = force_factor * clear_area
+        F1b = force_factor * covered_area
+        L1a = clear_depth / Decimal("2")
+        L1b = clear_depth + covered_depth / Decimal("2")
+        F1 = F1a + F1b
         L1 = water_depth / Decimal("2")  # Mid-height for pier type
     else:
         # Bored pile type: use explicit area and 2/3 water depth
@@ -156,8 +173,27 @@ def calculate_forces(
         # critical case is 45 degrees, and there are two faces
         # so the wetted area normal to the flow is area * sqrt(2)
         Ad = leg_config["area"] * Decimal("2").sqrt()
-        F1 = Decimal("0.5") * cd_pier * (average_water_velocity**2) * Ad * load_factor
         L1 = (Decimal("2") * water_depth) / Decimal("3")  # 2/3 height for bored pile
+        if water_depth > 0:
+            # The existing 2/3-height resultant represents a triangular
+            # projected area. Split that triangle at the debris boundary.
+            clear_ratio = clear_depth / water_depth
+            clear_area = Ad * clear_ratio**2
+            covered_area = Ad - clear_area
+            L1a = (Decimal("2") * clear_depth) / Decimal("3")
+            L1b = (
+                (Ad * L1 - clear_area * L1a) / covered_area
+                if covered_area > 0
+                else L1
+            )
+        else:
+            clear_area = Decimal("0")
+            covered_area = Ad
+            L1a = Decimal("0")
+            L1b = Decimal("0")
+        F1a = force_factor * clear_area
+        F1b = force_factor * covered_area
+        F1 = F1a + F1b
 
     # Calculate surface velocity
     surface_velocity = average_water_velocity * water_surface_velocity_factor
@@ -198,6 +234,10 @@ def calculate_forces(
     return {
         "F1": F1,  # Water Flow Force (kN)
         "L1": L1,  # Height of F1 application (m)
+        "F1a": F1a,  # Clear lower-portion water-flow force (kN)
+        "L1a": L1a,  # Height of F1a application (m)
+        "F1b": F1b,  # Debris-covered upper-portion water-flow force (kN)
+        "L1b": L1b,  # Height of F1b application (m)
         "F2": F2,  # Debris Force (kN)
         "L2": L2,  # Height of F2 application (m)
         "F3": F3,  # Log Impact Force (kN)
