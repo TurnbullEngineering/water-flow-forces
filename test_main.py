@@ -1,10 +1,85 @@
 """Unit tests for the Water Flow Forces Calculator."""
 
 import pytest
+import pandas as pd
 from decimal import Decimal
 from src.calculations import calculate_forces
 from src.constants import LegType
+from src.data_processing import process_dataframe
+from src.app import infer_column_width_from_filename
 from src.models import PierConfig, BoredPileConfig
+
+
+@pytest.mark.parametrize(
+    "filename,expected_width",
+    [
+        ("FF_Export_1500.xlsx", 1.5),
+        ("FF_Export_1650.xlsx", 1.65),
+        ("FF_Export_3000.xlsx", 3.0),
+        ("flood_inputs.xlsx", None),
+    ],
+)
+def test_infer_column_width_from_filename(filename, expected_width):
+    """Test extracting per-file column width from FF export filenames."""
+    assert infer_column_width_from_filename(filename) == expected_width
+
+
+def _default_processing_inputs() -> dict:
+    return {
+        "selected_event": "1% AEP",
+        "leg_type": str(LegType.PIER.value),
+        "column_diameter": "2.5",
+        "cd": "0.7",
+        "pile_diameter": "2.5",
+        "cd_pile": "0.7",
+        "min_debris_depth": "1.2",
+        "max_debris_depth": "3.0",
+        "log_mass": "2000",
+        "stopping_distance": "0.075",
+        "load_factor": "1.3",
+        "water_surface_velocity_factor": "1.4",
+    }
+
+
+def test_process_dataframe_supports_flat_input_columns():
+    """Test processing the original flat input column format."""
+    df = pd.DataFrame(
+        {
+            "Structure Number": ["T001"],
+            "1% AEP Event Peak Flood Depth": [1.482],
+            "1% AEP Event Peak Velocity": [1.944],
+            "1% AEP Event Scour": [0.5],
+        }
+    )
+
+    result = process_dataframe(df, _default_processing_inputs())
+
+    assert len(result) == 1
+    assert result.loc[0, "F1"] > 0
+    assert result.loc[0, "Fd2"] > 0
+
+
+def test_process_dataframe_supports_grouped_ff_export_columns():
+    """Test processing FF exports with repeated event headings and metric row."""
+    df = pd.DataFrame(
+        {
+            "Structure Number": [None, None, "T001"],
+            "1% AEP Event": ["Peak Flood Depth", None, 1.482],
+            "1% AEP Event.1": ["Peak Flood Level", None, 180.876],
+            "1% AEP Event.2": ["Peak Velocity", None, 1.944],
+            "1% AEP Event.3": ["Scour", None, 0.5],
+        }
+    )
+
+    result = process_dataframe(df, _default_processing_inputs())
+
+    assert len(result) == 1
+    assert result.loc[0, "Structure Number"] == "T001"
+    assert result.loc[0, "1% AEP Event Peak Flood Depth"] == 1.482
+    assert result.loc[0, "1% AEP Event Peak Velocity"] == 1.944
+    assert result.loc[0, "1% AEP Event Scour"] == 0.5
+    assert result.loc[0, "F1"] > 0
+    assert result.loc[0, "Fd2"] > 0
 
 
 def test_calculate_forces_pier_type():

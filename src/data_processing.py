@@ -4,8 +4,48 @@ from decimal import Decimal
 import pandas as pd
 import numpy as np
 from .calculations import calculate_forces, calculate_actual_debris_depth
-from .constants import LegType
+from .constants import EVENTS, LegType
 from .models import PierConfig, BoredPileConfig
+
+
+def _normalise_input_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Support both flat app columns and exported multi-row FF workbooks."""
+    df = df.copy()
+    df.columns = df.columns.str.replace("\n", " ").str.strip()
+
+    rename_map = {}
+    metric_names = {"Peak Flood Depth", "Peak Velocity", "Scour"}
+
+    for column in df.columns:
+        column_name = str(column)
+        base_column = column_name.split(".")[0]
+        if base_column not in {f"{event} Event" for event in EVENTS}:
+            continue
+
+        first_value = df[column].iloc[0] if not df.empty else None
+        metric_name = str(first_value).replace("\n", " ").strip()
+        if metric_name in metric_names:
+            rename_map[column] = f"{base_column} {metric_name}"
+
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    return df
+
+
+def _drop_non_data_export_rows(
+    df: pd.DataFrame, required_cols: list[str]
+) -> pd.DataFrame:
+    """Remove leading FF export rows used for grouped headers and units."""
+    if df.empty:
+        return df
+
+    for row_number, (_, row) in enumerate(df.iterrows()):
+        numeric_values = pd.to_numeric(row[required_cols], errors="coerce")
+        if numeric_values.notna().any():
+            return df.iloc[row_number:].reset_index(drop=True)
+
+    return df.iloc[0:0].reset_index(drop=True)
 
 
 def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
@@ -41,7 +81,7 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     ValueError
         If required columns are missing from the dataframe
     """
-    df.columns = df.columns.str.replace("\n", " ").str.strip()
+    df = _normalise_input_columns(df)
 
     # Use selected event for column names
     event = inputs["selected_event"]  # e.g. "1% AEP" or "PMF"
@@ -57,12 +97,15 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     if SCOUR_COL not in df.columns:
         missing_cols.append(SCOUR_COL)
 
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+
+    required_cols = [VELOCITY_COL, DEPTH_COL, SCOUR_COL]
+    df = _drop_non_data_export_rows(df, required_cols)
+
     df[VELOCITY_COL] = pd.to_numeric(df[VELOCITY_COL], errors="coerce")
     df[DEPTH_COL] = pd.to_numeric(df[DEPTH_COL], errors="coerce")
     df[SCOUR_COL] = pd.to_numeric(df[SCOUR_COL], errors="coerce")
-
-    if missing_cols:
-        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
 
     results = []
 
@@ -166,11 +209,12 @@ def process_dataframe(df: pd.DataFrame, inputs: dict) -> pd.DataFrame:
     # Process results and combine with original dataframe
     results_df = pd.DataFrame(results)
     combined_df = pd.concat([df, results_df], axis=1)
-    combined_df.replace(
-        to_replace=[np.inf, -np.inf, np.nan],
-        value="N/A",
-        inplace=True,
-    )
+    with pd.option_context("future.no_silent_downcasting", True):
+        combined_df.replace(
+            to_replace=[np.inf, -np.inf, np.nan],
+            value="N/A",
+            inplace=True,
+        )
 
     # Ensure all object columns are strings for consistent handling
     object_columns = combined_df.select_dtypes(include=["object"]).columns

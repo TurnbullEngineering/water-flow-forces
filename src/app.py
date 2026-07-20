@@ -1,5 +1,6 @@
 """Main application module for the Water Flow Forces Calculator."""
 
+import re
 import streamlit as st
 from datetime import datetime
 from decimal import Decimal, getcontext
@@ -36,6 +37,20 @@ from .models import PierConfig, BoredPileConfig
 
 # Set decimal precision
 getcontext().prec = 28
+
+
+def infer_column_width_from_filename(filename: str) -> float | None:
+    """Infer column width in metres from filenames such as FF_Export_1500.xlsx."""
+    match = re.search(r"(?<!\d)(\d{3,4})(?!\d)", filename)
+    if not match:
+        return None
+
+    width_mm = int(match.group(1))
+    width_m = width_mm / 1000
+    if 0.1 <= width_m <= 10.0:
+        return width_m
+
+    return None
 
 
 def main():
@@ -410,6 +425,9 @@ def main():
         - **{selected_event} Event Peak Velocity**: Will replace the preview average water velocity
         - **{selected_event} Event Scour**: Will be used for pile force calculations
 
+        The grouped FF export format is also supported, where event columns are grouped
+        by Peak Flood Depth, Peak Flood Level, Peak Velocity, and Scour.
+
         Other parameters will use the values from the sliders.
         All files will be processed automatically and available for download as a zip file.
         """
@@ -422,12 +440,42 @@ def main():
     if not uploaded_files:
         return
 
+    per_file_inputs = {}
+    if leg_type == LegType.PIER:
+        st.subheader("Per-File Column Widths")
+        st.caption(
+            "Set the column width/diameter for each uploaded file. "
+            "Values are inferred from filenames such as FF_Export_1500.xlsx when possible."
+        )
+
+        for index, uploaded_file in enumerate(uploaded_files):
+            inferred_width = infer_column_width_from_filename(uploaded_file.name)
+            default_width = (
+                inferred_width
+                if inferred_width is not None
+                else float(inputs["column_diameter"])
+            )
+            per_file_inputs[index] = st.number_input(
+                uploaded_file.name,
+                min_value=0.1,
+                max_value=10.0,
+                value=float(default_width),
+                step=0.05,
+                format="%.3f",
+                key=f"column_width_{index}_{uploaded_file.name}",
+                help="Column width/diameter in metres used for this file's pier force calculation.",
+            )
+
     from zipfile import ZipFile
 
     processed_files = []
     all_results_preview = []
 
-    for uploaded_file in uploaded_files:
+    for index, uploaded_file in enumerate(uploaded_files):
+        file_inputs = inputs.copy()
+        if leg_type == LegType.PIER:
+            file_inputs["column_diameter"] = str(per_file_inputs[index])
+
         try:
             df = pd.read_excel(uploaded_file)
         except Exception as e:
@@ -435,7 +483,7 @@ def main():
             continue
 
         try:
-            result_df = process_dataframe(df, inputs)
+            result_df = process_dataframe(df, file_inputs)
         except ValueError as e:
             st.error(f"Error processing file {uploaded_file.name}: {str(e)}")
             continue
@@ -463,9 +511,9 @@ def main():
 
         # Create parameters dataframe with exact values
         type_specific_params = (
-            {"Column Diameter (m)": inputs["column_diameter"]}
+            {"Column Width/Diameter (m)": file_inputs["column_diameter"]}
             if leg_type == LegType.PIER
-            else {"Wetted Area (m²)": inputs["wetted_area"]}
+            else {"Wetted Area (m²)": file_inputs["wetted_area"]}
         )
 
         params_df = pd.DataFrame(
@@ -484,17 +532,17 @@ def main():
                     "Pile Drag Coefficient (Cd)",
                 ],
                 "Value": [
-                    inputs["selected_event"],
+                    file_inputs["selected_event"],
                     LEG_TYPE_NAMES[leg_type],
                     *type_specific_params.values(),
-                    str(Decimal(str(inputs["cd"]))),
+                    str(Decimal(str(file_inputs["cd"]))),
                     "20.0",  # Debris span is hard-coded
-                    str(Decimal(str(inputs["log_mass"]))),
-                    str(Decimal(str(inputs["stopping_distance"]))),
-                    str(Decimal(str(inputs["load_factor"]))),
-                    str(Decimal(str(inputs["water_surface_velocity_factor"]))),
-                    str(Decimal(str(inputs["pile_diameter"]))),
-                    str(Decimal(str(inputs["cd_pile"]))),
+                    str(Decimal(str(file_inputs["log_mass"]))),
+                    str(Decimal(str(file_inputs["stopping_distance"]))),
+                    str(Decimal(str(file_inputs["load_factor"]))),
+                    str(Decimal(str(file_inputs["water_surface_velocity_factor"]))),
+                    str(Decimal(str(file_inputs["pile_diameter"]))),
+                    str(Decimal(str(file_inputs["cd_pile"]))),
                 ],
             }
         )
@@ -513,7 +561,7 @@ def main():
 
         excel_buffer.seek(0)
         processed_files.append((f"forces_results_{uploaded_file.name}", excel_buffer))
-        all_results_preview.append(result_df)
+        all_results_preview.append((uploaded_file.name, result_df))
 
     if not processed_files:
         st.error("No files were successfully processed")
@@ -531,8 +579,8 @@ def main():
     st.success(f"Successfully processed {len(processed_files)} files")
     st.subheader("Results Preview")
 
-    for i, result_df in enumerate(all_results_preview):
-        st.write(f"**File {i + 1}:**")
+    for i, (filename, result_df) in enumerate(all_results_preview):
+        st.write(f"**File {i + 1}: {filename}**")
         try:
             st.dataframe(result_df)
         except Exception:
